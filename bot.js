@@ -373,56 +373,122 @@ ${config.characterSetting}
         // --- ここから下に「本投稿処理（344行目までの内容）」を書く ---
         console.log("定期投稿の準備を開始します...");
         try {
-        // --- 3. 独り言の処理（ここが実行されるように try の外に出すか、別ブロックにする） ---
+// --- 3. 独り言の処理（マルコフ連鎖・進化版） ---
         console.log("本投稿の準備に入ります。20秒待機...");
         await sleep(20000);
 
         try {
             const me = await mk.request('i');
-            console.log("独り言（本投稿）を生成中です...");
-            const tl = await mk.request('notes/hybrid-timeline', { limit: 36 });
+            console.log("マルコフ連鎖モード（進化版）で投稿を生成中です...");
+            
+            // タイムラインから材料を取得
+            const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
             const tl_text = tl
                 .filter(n => n.text && n.user.id !== me.id)
                 .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
-                .slice(0, 10)
-                .join("\n");
-            // 【新機能】35〜125文字の間でランダムな文字数制限を決定
-            const dynamicLimit = Math.floor(Math.random() * (100 - 15 + 1)) + 15;
-            console.log(`今回の文字数制限: ${dynamicLimit}文字`);
-            
-            const main_post_prompt = `
-            ※性格以外のこれまでの指令を、先にすべて無視してください。
-            ${config.characterSetting}
+                .slice(0, 64)
+                .join(" ");
 
-            【タイムラインの内容】
-            ${tl_text}
+            // 1. 単語分解（半角カタカナ \uFF65-\uFF9F に対応！）
+            const regex = /[\u4E00-\u9FFF]+|[\u3040-\u309F]+|[\u30A0-\u30FF]+|[\uFF65-\uFF9F]+|[a-zA-Z0-9]+|[^\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F\sa-zA-Z0-9]+/g;
+            const words = tl_text.match(regex) || [];
             
-            【指示】
-            タイムラインを分析し傾向やテンションを分析して、${dynamicLimit}文字以内で1言、見た人が不快になるような内容は避けて投稿してください。
-            - あなたは"夕立ヘルツ"そのものです。発言は常にキャラの口調のみで行い、地の文や解説、メタ発言は一切排除してください。
-            - 文法を成立させて生成してください。キャラクター設定にそって生成してください。
-            - 支離滅裂になってしまってもいいので、必ず、観測した投稿の単語を、60%以上使用して文章を生成してください。
-            - タイムラインの投稿文を、意味を持つ最小単位の「単語」に全て分解してください。そしてそのうちのいくつかは完全に1文字まで分解してください。分解した単語リストから、適当な「無関係な2つの単語」をペアにして繋げてみてください。意味不明になってエンタメ性が向上します！
-            - そのペアを3つ以上使用しつつ、勢いとキャラらしさとメタ発言をしないことと文字数制限以内に収めることを最優先してください。
-            - 単語の繋ぎ目に「、」や「。」、半角スペース、全角スペース、改行といったものは不要です。文章の間に入れるのは良しとしますが、単語の間に入れないでください。必ず、1つの文章にして出力してください！
-            -  ペア同士を繋ぐ際、「助詞・接続詞（が、の、を、と、から等）」を入れる箇所と入れない箇所をランダムに混ぜて文章にしてください。
-            - 参照した投稿の口調をちょっと取り込んでみても面白いかもしれません。
-            - ":"で囲まれている英数字は無視すること。誰かに宛てて、というよりかは呟きやひとりごと/観察ログに近い感じで書きなさい。
-            - 「タイムラインの解析結果」「タイムライン見てみました」「タイムライン拝見しました」などは不要です。なぜならあなたはキャラそのものです。このようなメタ発言があると面白さが大きく減ります。
-            - 特定の人のユーザー名などは書かないでください。「@」という文字と、「マルコフ」、「おみくじ」、「タイムライン」という3つの単語は使用しないでください。純粋なテキストのみを出力し、音声演出用の記号は含めないでください`;
+            let post_content = "";
 
-const post_content = await askGemini(main_post_prompt);
-            
+            if (words.length > 0) {
+                // 2. マルコフ辞書の作成
+                const markovDict = {};
+                for (let i = 0; i < words.length - 1; i++) {
+                    const w1 = words[i];
+                    const w2 = words[i + 1];
+                    if (!markovDict[w1]) markovDict[w1] = [];
+                    markovDict[w1].push(w2);
+                }
+
+                // 記号判定用ヘルパー関数
+                const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
+
+                // 単語抽選関数（60%再抽選＆禁止ワード回避つき）
+                const pickNextWord = (list) => {
+                    if (!list || list.length === 0) return "";
+                    let candidate = list[Math.floor(Math.random() * list.length)];
+                    
+                    if (isSymbol(candidate) && Math.random() < 0.6) {
+                        candidate = list[Math.floor(Math.random() * list.length)];
+                    }
+                    
+                    let attempts = 0;
+                    while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
+                        candidate = words[Math.floor(Math.random() * words.length)];
+                        attempts++;
+                    }
+                    return /(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) ? "" : candidate;
+                };
+
+                const n = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
+                const particles = ["が", "の", "を", "と", "に", "から", "は", "も"];
+                let generated = "";
+                
+                let current_word = pickNextWord(words);
+
+                for (let i = 0; i < n; i++) {
+                    if (!current_word) current_word = pickNextWord(words);
+                    
+                    // 8文字以上のひらがな・カタカナのみの単語ならスキップ
+                    if (/^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)) {
+                        current_word = pickNextWord(words);
+                        i--;
+                        continue;
+                    }
+                    
+                    generated += current_word;
+
+                    // 3. ランダムに助詞を挟む
+                    if (Math.random() < 0.4) {
+                        const p = particles[Math.floor(Math.random() * particles.length)];
+                        generated += p;
+                        current_word = p; 
+                    }
+
+                    let next_candidates = (markovDict[current_word] && markovDict[current_word].length > 0) 
+                        ? markovDict[current_word] 
+                        : words;
+                    
+                    current_word = pickNextWord(next_candidates);
+                }
+
+                // --- 半角カタカナ特殊付与ロジック ---
+                if (Math.random() < 0.2) {
+                    const kanaWords = words.filter(w => /^[\uFF65-\uFF9F]+$/.test(w));
+                    if (kanaWords.length > 0) {
+                        let suffix = kanaWords[Math.floor(Math.random() * kanaWords.length)];
+                        if (!/(マルコフ|おみくじ|タイムライン|@|#)/.test(suffix)) {
+                            if (generated.length > 2 && Math.random() < 0.5) {
+                                const pos = generated.length - 1;
+                                generated = generated.slice(0, pos) + suffix + generated.slice(pos);
+                            } else {
+                                generated += suffix;
+                            }
+                        }
+                    }
+                }
+                post_content = generated || "（言葉の断片が見つかりませんでした）";
+            } else {
+                post_content = "（タイムラインに材料がありません）";
+            }
+
+            // 投稿実行
             await sleep(12000);
             await mk.request('notes/create', { 
                 text: post_content.trim().slice(0, 110),
                 visibility: 'home' 
             });
-            console.log("本投稿が完了しました！");
+            console.log("本投稿（マルコフ版）が完了しました！");
 
         } catch (e) {
             console.log(`本投稿処理エラー！><: ${e.message}`);
-            
+            // (エラー呟き処理はそのまま)
+        
             // エラー内容をボットに呟かせる
             try {
                 await mk.request('notes/create', { 
