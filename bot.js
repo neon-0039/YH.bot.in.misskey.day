@@ -593,12 +593,13 @@ if (words.length > 0) {
                             }
                         }
                     }
-                }
+                } // ← 半角カタカナロジックの終わり
+
                 post_content = generated || "（言葉の断片が見つかりませんでした）";
-            } else {
+
+            } else { // ★ ここが「if (words.length > 0)」に対応する else
                 post_content = "（タイムラインに材料がありません）";
             }
-
             // 投稿実行
             await sleep(12000);
             await mk.request('notes/create', { 
