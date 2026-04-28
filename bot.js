@@ -556,13 +556,6 @@ if (words.length > 0) {
                     }
                     // --- ここまで ---
 
-                    // 8文字以上のひらがな・カタカナのみの単語ならスキップ（あなたの既存ロジック）
-                    if (/^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)) {
-                        current_word = pickNextWord(words);
-                        i--;
-                        continue;
-                    }
-
                     post_content += current_word;
 
                     // 文末っぽくなったら終了
