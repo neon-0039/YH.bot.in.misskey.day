@@ -529,7 +529,7 @@ if (words.length > 0) {
                 
                 let current_word = pickNextWord(words);
 
-                for (let i = 0; i < 20; i++) {
+                for (let i = 0; i < n; i++) {
                     // まだ言葉がない場合はランダムに開始単語を拾う
                     if (!current_word) current_word = pickNextWord(words);
 
