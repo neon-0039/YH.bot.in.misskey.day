@@ -459,9 +459,10 @@ if (words.length > 0) {
         let brain = {};
         try {
             const res = await drive.files.get({ fileId, alt: 'media' });
-            brain = res.data; // すでにJSONとして取得されるはず
+            brain = res.data;
         } catch (e) {
-            console.log("既存の脳がないか読み込めないので新規作成します");
+            // ここが抜けているか、書き方が間違っているはずです
+            console.log("既存の脳がないため新規作成します");
             brain = {};
         }
 
