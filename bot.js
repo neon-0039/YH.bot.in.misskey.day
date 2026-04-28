@@ -14,6 +14,10 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const keyMain = process.env.GEMINI_API_KEY;      // プロジェクトA
 const keySub = process.env.GEMINI_API_KEY_SUB;   // プロジェクトB
 
+
+//繰り返しランダム
+const n = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
+
 // --- 時間による切り替えロジック (メインを午後に設定) ---
 const now = new Date();
 const jstHour = (now.getUTCHours() + 9) % 24; // UTCからJSTへ変換
