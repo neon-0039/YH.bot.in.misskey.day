@@ -416,215 +416,163 @@ ${config.characterSetting}
             console.log(`メンション処理エラー!><: ${e.message}`);
         } // ← ここが メンション取得 try の終わり
 
-        // --- ここから下に「本投稿処理（344行目までの内容）」を書く ---
         console.log("定期投稿の準備を開始します...");
-        try {
-// --- 3. 独り言の処理（マルコフ連鎖・進化版） ---
+    
+    try {
         console.log("本投稿の準備に入ります。20秒待機...");
         await sleep(20000);
 
-        try {
-            const me = await mk.request('i');
-            const my_id = me.id;
-            console.log("マルコフ連鎖モード（外部ライブラリ解析版）起動！");
-            
-            // 1. タイムラインから材料を取得
-            const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
-            const tl_text = tl
-                .filter(n => n.text && n.user.id !== my_id)
-                .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
-                .slice(0, 64)
-                .join(" ");
-            const words = segmenter.segment(tl_text);
-            // 記号判定用ヘルパー関数（エラー回避のためここで定義）
-            const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
-            // 2. 外部ライブラリ (TinySegmenter) 分解
-         // 3. Googleドライブへ蓄積
-            // --- 3. 独り言の処理 の中 ---
+        const me = await mk.request('i');
+        const my_id = me.id;
+        console.log("マルコフ連鎖モード起動！");
+        
+        // 1. タイムラインから材料を取得
+        const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
+        const tl_text = tl
+            .filter(n => n.text && n.user.id !== my_id)
+            .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
+            .slice(0, 64)
+            .join(" ");
+        
+        const words = segmenter.segment(tl_text);
+        const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
+        const particles = ["が", "の", "を", "と", "に", "から", "は", "も", "で"];
 
-// (中略：TL取得と単語分解 words の作成)
-
-if (words.length > 0) {
-    try {
-        const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
-        const auth = new google.auth.JWT(
-            gDriveCreds.client_email, null, gDriveCreds.private_key,
-            ['https://www.googleapis.com/auth/drive']
-        );
-        const drive = google.drive({ version: 'v3', auth });
-        const fileId = process.env.GDRIVE_FILE_ID;
-
-        // 【ここから新しい処理】
-        // 1. まず現在の脳（JSON）をダウンロードする
         let brain = {};
-        try {
-            const res = await drive.files.get({ fileId, alt: 'media' });
-            brain = res.data;
-        } catch (e) { 
-            console.log("脳の読み込み失敗。空で続行します");
-            brain = {};
-        } // ← ここでしっかり try-catch を完結させる！
-        // 2. 「助詞 -> 次の言葉」のペアを学習させる
-        for (let i = 0; i < words.length - 1; i++) {
-            const current = words[i];
-            const next = words[i + 1];
+        if (words.length > 0) {
+            // 2. Googleドライブへ蓄積（学習）
+            try {
+                const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
+                const auth = new google.auth.JWT(
+                    gDriveCreds.client_email, null, gDriveCreds.private_key,
+                    ['https://www.googleapis.com/auth/drive']
+                );
+                const drive = google.drive({ version: 'v3', auth });
+                const fileId = process.env.GDRIVE_FILE_ID;
 
-            // 今の単語が助詞リストに含まれている場合
-            if (particles.includes(current)) {
-                if (!brain[current]) brain[current] = [];
-                
-                // 次の言葉を蓄積（同じ言葉ばかりにならないよう100個制限など）
-                brain[current].push(next);
-                if (brain[current].length > 100) brain[current].shift();
-            }
-        }
+                // 既存の脳を読み込み
+                try {
+                    const res = await drive.files.get({ fileId, alt: 'media' });
+                    brain = (typeof res.data === 'object') ? res.data : JSON.parse(res.data || '{}');
+                } catch (e) {
+                    console.log("既存の脳がないため新規作成します");
+                }
 
-        // 3. 学習した結果をドライブへ上書き保存
-        await drive.files.update({
-            fileId: fileId,
-            media: {
-                mimeType: 'application/json',
-                body: JSON.stringify(brain, null, 2) // 見やすく整形して保存
-            }
-        });
-        console.log("Googleドライブの『脳』をアップデートしました！");
-
-    } catch (driveError) {
-        console.log("Googleドライブ連携失敗:", driveError.message);
-    }
-}
-
-            // 4. マルコフ辞書の作成（ここから後半の生成ロジックへ）
-            let post_content = "";
-            if (words.length > 0) {
-                const markovDict = {};
+                // 助詞ペアを学習
                 for (let i = 0; i < words.length - 1; i++) {
-                    const w1 = words[i];
-                    const w2 = words[i + 1];
-                    if (!markovDict[w1]) markovDict[w1] = [];
-                    markovDict[w1].push(w2);
+                    const current = words[i];
+                    const next = words[i + 1];
+                    if (particles.includes(current)) {
+                        if (!brain[current]) brain[current] = [];
+                        brain[current].push(next);
+                        if (brain[current].length > 100) brain[current].shift();
+                    }
                 }
 
-                // --- 以降、後半の「pickNextWord」や「generated」の抽選ループに続く ---                // 単語抽選関数（60%再抽選＆禁止ワード回避つき）
-                const pickNextWord = (list) => {
-                    if (!list || list.length === 0) return "";
-                    let candidate = list[Math.floor(Math.random() * list.length)];
-                    
-                    if (isSymbol(candidate) && Math.random() < 0.6) {
-                        candidate = list[Math.floor(Math.random() * list.length)];
-                    }
-                    
-                    let attempts = 0;
-                    while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
-                        candidate = words[Math.floor(Math.random() * words.length)];
-                        attempts++;
-                    }
-                    return /(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) ? "" : candidate;
-                };
+                // 書き戻し
+                await drive.files.update({
+                    fileId: fileId,
+                    media: { mimeType: 'application/json', body: JSON.stringify(brain, null, 2) }
+                });
+                console.log("Googleドライブの『脳』をアップデートしました！");
+            } catch (driveError) {
+                console.log("ドライブ連携に失敗（生成は続行）:", driveError.message);
+            }
 
-                const n = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
-                const particles = ["が", "の", "を", "と", "に", "から", "は", "も"];
-                let generated = "";
+            // 3. マルコフ文章生成
+            const markovDict = {};
+            for (let i = 0; i < n; i++) {
+                const w1 = words[i];
+                const w2 = words[i + 1];
+                if (!markovDict[w1]) markovDict[w1] = [];
+                markovDict[w1].push(w2);
+            }
+
+            const pickNextWord = (list) => {
+                if (!list || list.length === 0) return "";
+                let candidate = list[Math.floor(Math.random() * list.length)];
+                if (isSymbol(candidate) && Math.random() < 0.6) {
+                    candidate = list[Math.floor(Math.random() * list.length)];
+                }
+                let attempts = 0;
+                while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
+                    candidate = words[Math.floor(Math.random() * words.length)];
+                    attempts++;
+                }
+                return candidate;
+            };
+
+            const n = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
+            let generated = "";
+            let current_word = pickNextWord(words);
+
+            for (let i = 0; i < n; i++) {
+                if (!current_word) current_word = pickNextWord(words);
                 
-                let current_word = pickNextWord(words);
+                let foundNext = "";
+                const useBrain = Math.random() < 0.7; // 70%の確率でドライブの知識を使う
 
-                for (let i = 0; i < n; i++) {
-                    // まだ言葉がない場合はランダムに開始単語を拾う
-                    if (!current_word) current_word = pickNextWord(words);
-
-                    // --- ここから追加：助詞の接続ロジック ---
-                    let foundNext = "";
-                    const useBrain = Math.random() < 0.7; // 70%の確率で「脳」を参考にする
-
-                    // 1. 脳（ドライブのデータ）から探す
-                    if (useBrain && particles.includes(current_word) && brain[current_word]) {
-                        const candidates = brain[current_word];
-                        foundNext = candidates[Math.floor(Math.random() * candidates.length)];
-                    }
-
-                    // 2. 脳を使わない、または脳にデータがない場合は今のTL(markovDict)から探す
-                    if (!foundNext && markovDict[current_word]) {
-                        foundNext = pickNextWord(markovDict[current_word]);
-                    }
-
-                    // 3. 次の言葉が決まったら更新。決まらなければランダムに拾う
-                    if (foundNext) {
-                        current_word = foundNext;
-                    } else {
-                        current_word = pickNextWord(words);
-                    }
-                    // --- ここまで ---
-
-                    post_content += current_word;
-
-                    // 文末っぽくなったら終了
-                    if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
-                }
-                    
-                    generated += current_word;
-
-                    // 3. ランダムに助詞を挟む
-                    if (Math.random() < 0.4) {
-                        const p = particles[Math.floor(Math.random() * particles.length)];
-                        generated += p;
-                        current_word = p; 
-                    }
-
-                    let next_candidates = (markovDict[current_word] && markovDict[current_word].length > 0) 
-                        ? markovDict[current_word] 
-                        : words;
-                    
-                    current_word = pickNextWord(next_candidates);
+                if (useBrain && particles.includes(current_word) && brain[current_word]) {
+                    const candidates = brain[current_word];
+                    foundNext = candidates[Math.floor(Math.random() * candidates.length)];
                 }
 
-                // --- 半角カタカナ特殊付与ロジック ---
-                if (Math.random() < 0.2) {
-                    const kanaWords = words.filter(w => /^[\uFF65-\uFF9F]+$/.test(w));
-                    if (kanaWords.length > 0) {
-                        let suffix = kanaWords[Math.floor(Math.random() * kanaWords.length)];
-                        if (!/(マルコフ|おみくじ|タイムライン|@|#)/.test(suffix)) {
-                            if (generated.length > 2 && Math.random() < 0.5) {
-                                const pos = generated.length - 1;
-                                generated = generated.slice(0, pos) + suffix + generated.slice(pos);
-                            } else {
-                                generated += suffix;
-                            }
+                if (!foundNext && markovDict[current_word]) {
+                    foundNext = pickNextWord(markovDict[current_word]);
+                }
+
+                current_word = foundNext || pickNextWord(words);
+
+                if (/^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)) {
+                    current_word = pickNextWord(words);
+                    i--; continue;
+                }
+
+                generated += current_word;
+                if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
+            }
+
+            // 4. 半角カタカナ特殊付与
+            if (Math.random() < 0.2) {
+                const kanaWords = words.filter(w => /^[\uFF65-\uFF9F]+$/.test(w));
+                if (kanaWords.length > 0) {
+                    let suffix = kanaWords[Math.floor(Math.random() * kanaWords.length)];
+                    if (!/(マルコフ|おみくじ|タイムライン|@|#)/.test(suffix)) {
+                        if (generated.length > 2 && Math.random() < 0.5) {
+                            const pos = generated.length - 1;
+                            generated = generated.slice(0, pos) + suffix + generated.slice(pos);
+                        } else {
+                            generated += suffix;
                         }
                     }
-                } // ← 半角カタカナロジックの終わり
-
-                post_content = generated || "（言葉の断片が見つかりませんでした）";
-
-            } else { // ★ ここが「if (words.length > 0)」に対応する else
-                post_content = "（タイムラインに材料がありません）";
+                }
             }
-            // 投稿実行
+
+            const post_content = generated || "（言葉の断片が見つかりませんでした）";
+
+            // 5. 投稿実行
             await sleep(12000);
             await mk.request('notes/create', { 
                 text: post_content.trim().slice(0, 110),
                 visibility: 'home' 
             });
-            console.log("本投稿（マルコフ版）が完了しました！");
+            console.log("本投稿が完了しました！");
 
-        } catch (e) {
-            console.log(`本投稿処理エラー！><: ${e.message}`);
-            // (エラー呟き処理はそのまま)
-        
-            // エラー内容をボットに呟かせる
-            try {
-                await mk.request('notes/create', { 
-                    text: `投稿エラー！><管理者さーん！（エラー: ${e.message}）`,
-                    visibility: 'home' 
-                });
-            } catch (postError) {
-                console.error("エラー投稿自体にも失敗しました:", postError.message);
-            }
-        } // ← ここで本投稿の try-catch が終わる
-        
+        } else {
+            console.log("TLに材料がないため投稿をスキップしました");
+        }
+
     } catch (e) {
-        console.log(`致命的なエラー！><: ${e.message}`);
-    } // ← ここで main 関数の try-catch が終わる
-} // ← ここで main 関数自体が終わる
+        console.error(`致命的なエラー: ${e.message}`);
+        try {
+            await mk.request('notes/create', { 
+                text: `投稿エラー！><（エラー: ${e.message}）`,
+                visibility: 'home' 
+            });
+        } catch (postError) {
+            console.error("エラー通知にも失敗しました");
+        }
+    }
+}
 
-// 関数の実行
 main();
