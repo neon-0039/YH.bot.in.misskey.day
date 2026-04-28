@@ -573,23 +573,22 @@ ${config.characterSetting}
             visibility: 'home' 
         });
         console.log("本投稿が完了しました！");
-    } catch (e) { console.error(e); }
-}
-    try{
-    else { // ★ if (words.length > 0) に対応する else
-        const post_content = "（タイムラインに材料がありません）";
-        console.log(post_content);
+    } catch (e) { 
+        console.error("本投稿中にエラーが発生:", e); 
     }
-    } catch (e) {
-        console.error(`致命的なエラー: ${e.message}`);
-        try {
-            await mk.request('notes/create', { 
-                text: `投稿エラー！><（エラー: ${e.message}）`,
-                visibility: 'home' 
-            });
-        } catch (postError) {
-            console.error("エラー通知にも失敗しました");
-        }
+    
+    // --- ここから下がめちゃくちゃになっていた部分の修正 ---
+} catch (e) {
+    console.error(`致命的なエラー！><: ${e.message}`);
+    try {
+        await mk.request('notes/create', { 
+            text: `投稿エラー！><（エラー: ${e.message}）`,
+            visibility: 'home' 
+        });
+    } catch (postError) {
+        console.error("エラー通知にも失敗しました");
     }
 }
+
+// main関数の実行
 main();
