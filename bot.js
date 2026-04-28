@@ -494,89 +494,90 @@ ${config.characterSetting}
 
         }
         // --- この下に生成ロジック（const mm = ... や forループ）が続く ---
-            // 3. マルコフ文章生成
-            const markovDict = {};
-            for (let i = 0; i < n; i++) {
-                const w1 = words[i];
-                const w2 = words[i + 1];
-                if (!markovDict[w1]) markovDict[w1] = [];
-                markovDict[w1].push(w2);
+            // --- 3. マルコフ文章生成 ---
+        const markovDict = {};
+        // ここが n になっていたので修正（words.length - 1 まで回すのが正解）
+        for (let i = 0; i < n ; i++) {
+            const w1 = words[i];
+            const w2 = words[i + 1];
+            if (!markovDict[w1]) markovDict[w1] = [];
+            markovDict[w1].push(w2);
+        }
+
+        const pickNextWord = (list) => {
+            if (!list || list.length === 0) return "";
+            let candidate = list[Math.floor(Math.random() * list.length)];
+            if (isSymbol(candidate) && Math.random() < 0.6) {
+                candidate = list[Math.floor(Math.random() * list.length)];
+            }
+            let attempts = 0;
+            while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
+                candidate = words[Math.floor(Math.random() * words.length)];
+                attempts++;
+            }
+            return candidate;
+        };
+
+        const mm = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
+        let generated = "";
+        let current_word = pickNextWord(words);
+
+        for (let i = 0; i < mm; i++) {
+            if (!current_word) current_word = pickNextWord(words);
+            
+            let foundNext = "";
+            const useBrain = Math.random() < 0.7;
+
+            if (useBrain && particles.includes(current_word) && brain[current_word]) {
+                const candidates = brain[current_word];
+                foundNext = candidates[Math.floor(Math.random() * candidates.length)];
             }
 
-            const pickNextWord = (list) => {
-                if (!list || list.length === 0) return "";
-                let candidate = list[Math.floor(Math.random() * list.length)];
-                if (isSymbol(candidate) && Math.random() < 0.6) {
-                    candidate = list[Math.floor(Math.random() * list.length)];
-                }
-                let attempts = 0;
-                while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
-                    candidate = words[Math.floor(Math.random() * words.length)];
-                    attempts++;
-                }
-                return candidate;
-            };
-
-            const mm = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
-            let generated = "";
-            let current_word = pickNextWord(words);
-
-            for (let i = 0; i < mm; i++) {
-                if (!current_word) current_word = pickNextWord(words);
-                
-                let foundNext = "";
-                const useBrain = Math.random() < 0.7; // 70%の確率でドライブの知識を使う
-
-                if (useBrain && particles.includes(current_word) && brain[current_word]) {
-                    const candidates = brain[current_word];
-                    foundNext = candidates[Math.floor(Math.random() * candidates.length)];
-                }
-
-                if (!foundNext && markovDict[current_word]) {
-                    foundNext = pickNextWord(markovDict[current_word]);
-                }
-
-                current_word = foundNext || pickNextWord(words);
-
-                if (/^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)) {
-                    current_word = pickNextWord(words);
-                    i--; continue;
-                }
-
-                generated += current_word;
-                if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
+            if (!foundNext && markovDict[current_word]) {
+                foundNext = pickNextWord(markovDict[current_word]);
             }
 
-            // 4. 半角カタカナ特殊付与
-            if (Math.random() < 0.2) {
-                const kanaWords = words.filter(w => /^[\uFF65-\uFF9F]+$/.test(w));
-                if (kanaWords.length > 0) {
-                    let suffix = kanaWords[Math.floor(Math.random() * kanaWords.length)];
-                    if (!/(マルコフ|おみくじ|タイムライン|@|#)/.test(suffix)) {
-                        if (generated.length > 2 && Math.random() < 0.5) {
-                            const pos = generated.length - 1;
-                            generated = generated.slice(0, pos) + suffix + generated.slice(pos);
-                        } else {
-                            generated += suffix;
-                        }
+            current_word = foundNext || pickNextWord(words);
+
+            if (/^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)) {
+                current_word = pickNextWord(words);
+                i--; continue;
+            }
+
+            generated += current_word;
+            if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
+        }
+
+        // 4. 半角カタカナ特殊付与
+        if (Math.random() < 0.2) {
+            const kanaWords = words.filter(w => /^[\uFF65-\uFF9F]+$/.test(w));
+            if (kanaWords.length > 0) {
+                let suffix = kanaWords[Math.floor(Math.random() * kanaWords.length)];
+                if (!/(マルコフ|おみくじ|タイムライン|@|#)/.test(suffix)) {
+                    if (generated.length > 2 && Math.random() < 0.5) {
+                        const pos = generated.length - 1;
+                        generated = generated.slice(0, pos) + suffix + generated.slice(pos);
+                    } else {
+                        generated += suffix;
                     }
                 }
             }
-
-            const post_content = generated || "（言葉の断片が見つかりませんでした）";
-
-            // 5. 投稿実行
-            await sleep(12000);
-            await mk.request('notes/create', { 
-                text: post_content.trim().slice(0, 110),
-                visibility: 'home' 
-            });
-            console.log("本投稿が完了しました！");
-
-        } else { // ★ エラーが出ていた 573行目あたりの else はここ！
-            post_content = "（タイムラインに材料がありません）";
         }
 
+        const post_content = generated || "（言葉の断片が見つかりませんでした）";
+
+        // 5. 投稿実行
+        await sleep(12000);
+        await mk.request('notes/create', { 
+            text: post_content.trim().slice(0, 110),
+            visibility: 'home' 
+        });
+        console.log("本投稿が完了しました！");
+
+    } else { // ★ if (words.length > 0) に対応する else
+        const post_content = "（タイムラインに材料がありません）";
+        console.log(post_content);
+    }
     } catch (e) {
         console.error(`致命的なエラー: ${e.message}`);
         try {
