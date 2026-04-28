@@ -435,11 +435,7 @@ ${config.characterSetting}
                 .slice(0, 64)
                 .join(" ");
 
-            // 2. 外部ライブラリ (TinySegmenter) による単語分解
-            // ※あらかじめ const TinySegmenter = require('tiny-segmenter'); const segmenter = new TinySegmenter(); しておく
-            const words = segmenter.segment(tl_text);
-            console.log(`分解完了: ${words.length} 単語取得`);
-
+            // 2. 外部ライブラリ (TinySegmenter) 分解
          // 3. Googleドライブへ蓄積
             if (words.length > 0) {
                 try {
