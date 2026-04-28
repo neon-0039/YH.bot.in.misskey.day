@@ -4,7 +4,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Misskey APIの初期化部分がある場合、以下のように書いてみてください
 // const api = new misskey.api.api({ ... });
-
+// ファイルの上のほう
+const particles = ["が", "の", "を", "と", "に", "から", "は", "も", "で"];
 // もしこれまでのコードで misskey.api を使っていたなら、以下のように定義し直すとスムーズです
 const { api: MisskeyApi } = misskey;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -439,39 +440,60 @@ ${config.characterSetting}
             const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
             // 2. 外部ライブラリ (TinySegmenter) 分解
          // 3. Googleドライブへ蓄積
-            if (words.length > 0) {
-                try {
-                    console.log("JSONデータの冒頭5文字:", process.env.GDRIVE_SERVICE_ACCOUNT?.substring(0, 5));
-                    const serviceAccount = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
-                    // Secretsに保存したJSONをオブジェクトに変換
-                   let rawJson = process.env.GDRIVE_SERVICE_ACCOUNT.trim();
-                    // もし前後が引用符で囲まれていたら除去する
-                    if (rawJson.startsWith('"') && rawJson.endsWith('"')) {
-                        rawJson = rawJson.slice(1, -1);
-                    }
-                    const gDriveCreds = JSON.parse(rawJson);
-                    const auth = new google.auth.JWT(
-                        gDriveCreds.client_email, 
-                        null,
-                        gDriveCreds.private_key,
-                        ['https://www.googleapis.com/auth/drive']
-                    );
-                    
-                    const drive = google.drive({ version: 'v3', auth });
-                    const fileId = process.env.GDRIVE_FILE_ID;
+            // --- 3. 独り言の処理 の中 ---
 
-                    await drive.files.update({
-                        fileId: fileId,
-                        media: {
-                            mimeType: 'text/plain',
-                            body: words.join(" ") + "\n"
-                        }
-                    });
-                    console.log("Googleドライブへの学習データ蓄積完了");
-                } catch (driveError) {
-                    console.log("Googleドライブ連携失敗（スキップ）:", driveError.message);
-                }
+// (中略：TL取得と単語分解 words の作成)
+
+if (words.length > 0) {
+    try {
+        const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
+        const auth = new google.auth.JWT(
+            gDriveCreds.client_email, null, gDriveCreds.private_key,
+            ['https://www.googleapis.com/auth/drive']
+        );
+        const drive = google.drive({ version: 'v3', auth });
+        const fileId = process.env.GDRIVE_FILE_ID;
+
+        // 【ここから新しい処理】
+        // 1. まず現在の脳（JSON）をダウンロードする
+        let brain = {};
+        try {
+            const res = await drive.files.get({ fileId, alt: 'media' });
+            brain = res.data; // すでにJSONとして取得されるはず
+        } catch (e) {
+            console.log("既存の脳がないか読み込めないので新規作成します");
+            brain = {};
+        }
+
+        // 2. 「助詞 -> 次の言葉」のペアを学習させる
+        for (let i = 0; i < words.length - 1; i++) {
+            const current = words[i];
+            const next = words[i + 1];
+
+            // 今の単語が助詞リストに含まれている場合
+            if (particles.includes(current)) {
+                if (!brain[current]) brain[current] = [];
+                
+                // 次の言葉を蓄積（同じ言葉ばかりにならないよう100個制限など）
+                brain[current].push(next);
+                if (brain[current].length > 100) brain[current].shift();
             }
+        }
+
+        // 3. 学習した結果をドライブへ上書き保存
+        await drive.files.update({
+            fileId: fileId,
+            media: {
+                mimeType: 'application/json',
+                body: JSON.stringify(brain, null, 2) // 見やすく整形して保存
+            }
+        });
+        console.log("Googleドライブの『脳』をアップデートしました！");
+
+    } catch (driveError) {
+        console.log("Googleドライブ連携失敗:", driveError.message);
+    }
+}
 
             // 4. マルコフ辞書の作成（ここから後半の生成ロジックへ）
             let post_content = "";
