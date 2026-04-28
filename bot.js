@@ -566,29 +566,30 @@ ${config.characterSetting}
 
         const post_content = generated || "（言葉の断片が見つかりませんでした）";
 
-        // 5. 投稿実行
+        // --- 5. 投稿実行 ---
         await sleep(12000);
         await mk.request('notes/create', { 
             text: post_content.trim().slice(0, 110),
             visibility: 'home' 
         });
         console.log("本投稿が完了しました！");
-    } catch (e) { 
-        console.error("本投稿中にエラーが発生:", e); 
-    }
-    
-    // --- ここから下がめちゃくちゃになっていた部分の修正 ---
-} catch (e) {
-    console.error(`致命的なエラー！><: ${e.message}`);
-    try {
-        await mk.request('notes/create', { 
-            text: `投稿エラー！><（エラー: ${e.message}）`,
-            visibility: 'home' 
-        });
-    } catch (postError) {
-        console.error("エラー通知にも失敗しました");
+
+    } catch (e) {
+        // 全体的なエラーハンドリング
+        console.error(`致命的なエラー: ${e.message}`);
+        try {
+            // エラー通知（文言はそのまま！）
+            await mk.request('notes/create', { 
+                text: `投稿エラー！><（エラー: ${e.message}）`,
+                visibility: 'home' 
+            });
+        } catch (postError) {
+            console.error("エラー通知にも失敗しました");
+        }
     }
 }
 
+// 最後にしっかり実行
+main();
 // main関数の実行
 main();
