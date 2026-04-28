@@ -442,12 +442,13 @@ ${config.characterSetting}
                     console.log("JSONデータの冒頭5文字:", process.env.GDRIVE_SERVICE_ACCOUNT?.substring(0, 5));
                     const serviceAccount = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
                     // Secretsに保存したJSONをオブジェクトに変換
-                    const serviceAccount = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
+                    // const serviceAccount = ... を以下のように変更
+                    const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
 
                     const auth = new google.auth.JWT(
-                        serviceAccount.client_email, // JSON内のメール
+                        gDriveCreds.client_email, 
                         null,
-                        serviceAccount.private_key,  // JSON内の秘密鍵（JSONから直接読むならreplace不要なことが多いです）
+                        gDriveCreds.private_key,
                         ['https://www.googleapis.com/auth/drive']
                     );
                     
