@@ -8,6 +8,6 @@
     "misskey-js": "^0.0.15",
     "axios": "^1.6.0"
   }
-  "npm":"install tiny-segmenter googleapis"
+  "npm install tiny-segmenter googleapis"
 }
 
