@@ -443,6 +443,8 @@ ${config.characterSetting}
          // 3. Googleドライブへ蓄積
             if (words.length > 0) {
                 try {
+                    console.log("JSONデータの冒頭5文字:", process.env.GDRIVE_SERVICE_ACCOUNT?.substring(0, 5));
+                    const serviceAccount = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
                     // Secretsに保存したJSONをオブジェクトに変換
                     const serviceAccount = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
 
