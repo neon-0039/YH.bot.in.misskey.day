@@ -16,7 +16,7 @@ const keySub = process.env.GEMINI_API_KEY_SUB;   // プロジェクトB
 
 
 //繰り返しランダム
-const n = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
+const mm = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
 
 // --- 時間による切り替えロジック (メインを午後に設定) ---
 const now = new Date();
@@ -510,7 +510,7 @@ ${config.characterSetting}
             let generated = "";
             let current_word = pickNextWord(words);
 
-            for (let i = 0; i < n; i++) {
+            for (let i = 0; i < mm; i++) {
                 if (!current_word) current_word = pickNextWord(words);
                 
                 let foundNext = "";
