@@ -494,7 +494,7 @@ if (words.length > 0) {
     }
 }
 
-            // 4. マルコフ辞書の作成（ここから後半の生成ロジックへ）
+            // 4. マルコフ辞書の作成
             let post_content = "";
             if (words.length > 0) {
                 const markovDict = {};
@@ -505,76 +505,57 @@ if (words.length > 0) {
                     markovDict[w1].push(w2);
                 }
 
-                // --- 以降、後半の「pickNextWord」や「generated」の抽選ループに続く ---                // 単語抽選関数（60%再抽選＆禁止ワード回避つき）
                 const pickNextWord = (list) => {
                     if (!list || list.length === 0) return "";
                     let candidate = list[Math.floor(Math.random() * list.length)];
-                    
                     if (isSymbol(candidate) && Math.random() < 0.6) {
                         candidate = list[Math.floor(Math.random() * list.length)];
                     }
-                    
                     let attempts = 0;
                     while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
                         candidate = words[Math.floor(Math.random() * words.length)];
                         attempts++;
                     }
-                    return /(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) ? "" : candidate;
+                    return candidate;
                 };
 
                 const n = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
                 const particles = ["が", "の", "を", "と", "に", "から", "は", "も"];
                 let generated = "";
-                
                 let current_word = pickNextWord(words);
 
+                // --- 文章生成ループ（ここを整理しました） ---
                 for (let i = 0; i < n; i++) {
-                    // まだ言葉がない場合はランダムに開始単語を拾う
                     if (!current_word) current_word = pickNextWord(words);
 
-                    // --- ここから追加：助詞の接続ロジック ---
                     let foundNext = "";
-                    const useBrain = Math.random() < 0.7; // 70%の確率で「脳」を参考にする
+                    const useBrain = Math.random() < 0.7;
 
-                    // 1. 脳（ドライブのデータ）から探す
                     if (useBrain && particles.includes(current_word) && brain[current_word]) {
                         const candidates = brain[current_word];
                         foundNext = candidates[Math.floor(Math.random() * candidates.length)];
                     }
 
-                    // 2. 脳を使わない、または脳にデータがない場合は今のTL(markovDict)から探す
                     if (!foundNext && markovDict[current_word]) {
                         foundNext = pickNextWord(markovDict[current_word]);
                     }
 
-                    // 3. 次の言葉が決まったら更新。決まらなければランダムに拾う
                     if (foundNext) {
                         current_word = foundNext;
                     } else {
                         current_word = pickNextWord(words);
                     }
-                    // --- ここまで ---
 
-                    post_content += current_word;
-
-                    // 文末っぽくなったら終了
-                    if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
-                }
-                    
-                    generated += current_word;
-
-                    // 3. ランダムに助詞を挟む
-                    if (Math.random() < 0.4) {
-                        const p = particles[Math.floor(Math.random() * particles.length)];
-                        generated += p;
-                        current_word = p; 
+                    // 8文字以上のスキップ
+                    if (/^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)) {
+                        current_word = pickNextWord(words);
+                        i--;
+                        continue;
                     }
 
-                    let next_candidates = (markovDict[current_word] && markovDict[current_word].length > 0) 
-                        ? markovDict[current_word] 
-                        : words;
-                    
-                    current_word = pickNextWord(next_candidates);
+                    generated += current_word;
+
+                    if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
                 }
 
                 // --- 半角カタカナ特殊付与ロジック ---
@@ -591,13 +572,14 @@ if (words.length > 0) {
                             }
                         }
                     }
-                } // ← 半角カタカナロジックの終わり
+                }
 
                 post_content = generated || "（言葉の断片が見つかりませんでした）";
 
-            } else { // ★ ここが「if (words.length > 0)」に対応する else
+            } else {
                 post_content = "（タイムラインに材料がありません）";
             }
+
             // 投稿実行
             await sleep(12000);
             await mk.request('notes/create', { 
@@ -608,23 +590,18 @@ if (words.length > 0) {
 
         } catch (e) {
             console.log(`本投稿処理エラー！><: ${e.message}`);
-            // (エラー呟き処理はそのまま)
-        
-            // エラー内容をボットに呟かせる
             try {
                 await mk.request('notes/create', { 
                     text: `投稿エラー！><管理者さーん！（エラー: ${e.message}）`,
                     visibility: 'home' 
                 });
             } catch (postError) {
-                console.error("エラー投稿自体にも失敗しました:", postError.message);
+                console.error("エラー投稿失敗:", postError.message);
             }
-        } // ← ここで本投稿の try-catch が終わる
-        
+        }
     } catch (e) {
         console.log(`致命的なエラー！><: ${e.message}`);
-    } // ← ここで main 関数の try-catch が終わる
-} // ← ここで main 関数自体が終わる
+    }
+}
 
-// 関数の実行
 main();
