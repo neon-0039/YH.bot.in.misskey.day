@@ -460,12 +460,10 @@ if (words.length > 0) {
         try {
             const res = await drive.files.get({ fileId, alt: 'media' });
             brain = res.data;
-        } catch (e) {
-            // ここが抜けているか、書き方が間違っているはずです
-            console.log("既存の脳がないため新規作成します");
+        } catch (e) { 
+            console.log("脳の読み込み失敗。空で続行します");
             brain = {};
-        }
-
+        } // ← ここでしっかり try-catch を完結させる！
         // 2. 「助詞 -> 次の言葉」のペアを学習させる
         for (let i = 0; i < words.length - 1; i++) {
             const current = words[i];
