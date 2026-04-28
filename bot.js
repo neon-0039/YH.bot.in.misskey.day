@@ -22,8 +22,11 @@ const currentKey = (jstHour >= 12) ? keyMain : (keySub || keyMain);
 console.log(`Mainキーの長さ: ${keyMain?.length}, Subキーの長さ: ${keySub?.length}`);
 console.log(`【システム情報】現在時刻: ${jstHour}時 / 使用APIキー: ${jstHour >= 12 ? '午後(メイン)' : '午前(サブ)'}`);
 // 現在時刻に基づいて使用するキーを決定（日本時間 JST 基準）
-const { google } = require('googleapis');
+import { google } from 'googleapis';
+import TinySegmenter from 'tiny-segmenter';
 
+// TinySegmenterのインスタンス化（importした直後などでOK）
+const segmenter = new TinySegmenter();
 /**
  * Google Drive APIへの認証を行う関数
  */
