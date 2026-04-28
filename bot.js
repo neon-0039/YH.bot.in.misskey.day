@@ -529,15 +529,45 @@ if (words.length > 0) {
                 
                 let current_word = pickNextWord(words);
 
-                for (let i = 0; i < n; i++) {
+                for (let i = 0; i < 20; i++) {
+                    // まだ言葉がない場合はランダムに開始単語を拾う
                     if (!current_word) current_word = pickNextWord(words);
-                    
-                    // 8文字以上のひらがな・カタカナのみの単語ならスキップ
+
+                    // --- ここから追加：助詞の接続ロジック ---
+                    let foundNext = "";
+                    const useBrain = Math.random() < 0.7; // 70%の確率で「脳」を参考にする
+
+                    // 1. 脳（ドライブのデータ）から探す
+                    if (useBrain && particles.includes(current_word) && brain[current_word]) {
+                        const candidates = brain[current_word];
+                        foundNext = candidates[Math.floor(Math.random() * candidates.length)];
+                    }
+
+                    // 2. 脳を使わない、または脳にデータがない場合は今のTL(markovDict)から探す
+                    if (!foundNext && markovDict[current_word]) {
+                        foundNext = pickNextWord(markovDict[current_word]);
+                    }
+
+                    // 3. 次の言葉が決まったら更新。決まらなければランダムに拾う
+                    if (foundNext) {
+                        current_word = foundNext;
+                    } else {
+                        current_word = pickNextWord(words);
+                    }
+                    // --- ここまで ---
+
+                    // 8文字以上のひらがな・カタカナのみの単語ならスキップ（あなたの既存ロジック）
                     if (/^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)) {
                         current_word = pickNextWord(words);
                         i--;
                         continue;
                     }
+
+                    post_content += current_word;
+
+                    // 文末っぽくなったら終了
+                    if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
+                }
                     
                     generated += current_word;
 
