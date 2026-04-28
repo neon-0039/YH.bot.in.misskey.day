@@ -440,24 +440,27 @@ ${config.characterSetting}
             const words = segmenter.segment(tl_text);
             console.log(`分解完了: ${words.length} 単語取得`);
 
-            // 3. Googleドライブへ分解した語彙を蓄積 (API接続)
+         // 3. Googleドライブへ蓄積
             if (words.length > 0) {
                 try {
+                    // Secretsに保存したJSONをオブジェクトに変換
+                    const serviceAccount = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
+
                     const auth = new google.auth.JWT(
-                        process.env.GDRIVE_CLIENT_EMAIL,
+                        serviceAccount.client_email, // JSON内のメール
                         null,
-                        process.env.GDRIVE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                        serviceAccount.private_key,  // JSON内の秘密鍵（JSONから直接読むならreplace不要なことが多いです）
                         ['https://www.googleapis.com/auth/drive']
                     );
+                    
                     const drive = google.drive({ version: 'v3', auth });
-                    const fileId = process.env.GDRIVE_FILE_ID; // 保存先txtのID
+                    const fileId = process.env.GDRIVE_FILE_ID;
 
-                    // 現在のファイル内容を取得して追記する（または単純に上書き）
                     await drive.files.update({
                         fileId: fileId,
                         media: {
                             mimeType: 'text/plain',
-                            body: words.join(" ") + "\n" // スペース区切りで蓄積
+                            body: words.join(" ") + "\n"
                         }
                     });
                     console.log("Googleドライブへの学習データ蓄積完了");
