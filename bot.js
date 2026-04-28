@@ -458,39 +458,39 @@ ${config.characterSetting}
                 }
 
                 // --- 改良版：半角カタカナの塊を抽出して学習 ---
-                // 文中の半角カタカナの塊をすべて見つける
                 const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
                 
                 for (let i = 0; i < words.length - 1; i++) {
                     const current = words[i];
                     let next = words[i + 1];
 
-                    // もし今の単語が助詞なら学習開始
                     if (particles.includes(current)) {
                         if (!brain[current]) brain[current] = [];
 
-                        // 次の単語が「半角カタカナの断片」だった場合、
-                        // kanaBlocksの中から、その断片で始まる「塊」を探して置き換える
                         if (/^[\uFF65-\uFF9F]+$/.test(next)) {
                             const fullBlock = kanaBlocks.find(block => block.startsWith(next));
                             if (fullBlock) next = fullBlock; 
                         }
 
-                        // 脳に蓄積（上限20,000件）
                         brain[current].push(next);
                         if (brain[current].length > 20000) {
-                            brain[current].shift(); // 古いものから削除
+                            brain[current].shift();
                         }
                     }
                 }
 
-                // 書き戻し
                 await drive.files.update({
                     fileId: fileId,
                     media: { mimeType: 'application/json', body: JSON.stringify(brain, null, 2) }
                 });
                 console.log("Googleドライブの『脳』をアップデート完了（上限2万件モード）");
-                
+
+            } catch (driveError) { // ★この catch がないと SyntaxError になります
+                console.log("ドライブ連携に失敗（生成は続行）:", driveError.message);
+            } // ★ドライブ全体の try ブロックをここでしっかり閉じる！
+        } // ★if (words.length > 0) のブロックを閉じる！
+
+        // --- この下に生成ロジック（const mm = ... や forループ）が続く ---
             // 3. マルコフ文章生成
             const markovDict = {};
             for (let i = 0; i < n; i++) {
