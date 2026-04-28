@@ -443,7 +443,6 @@ ${config.characterSetting}
             // 3. Googleドライブへ分解した語彙を蓄積 (API接続)
             if (words.length > 0) {
                 try {
-                    const { google } = require('googleapis');
                     const auth = new google.auth.JWT(
                         process.env.GDRIVE_CLIENT_EMAIL,
                         null,
