@@ -479,17 +479,20 @@ ${config.characterSetting}
                     }
                 }
 
+                // --- 3. Googleドライブへ書き戻し ---
                 await drive.files.update({
                     fileId: fileId,
                     media: { mimeType: 'application/json', body: JSON.stringify(brain, null, 2) }
                 });
                 console.log("Googleドライブの『脳』をアップデート完了（上限2万件モード）");
 
-            } catch (driveError) { // ★この catch がないと SyntaxError になります
+            } catch (driveError) {
+                // ドライブの処理（try）でエラーが起きたらここに来る
                 console.log("ドライブ連携に失敗（生成は続行）:", driveError.message);
-            } // ★ドライブ全体の try ブロックをここでしっかり閉じる！
-        } // ★if (words.length > 0) のブロックを閉じる！
+            }
+            // ↑ ここでドライブ処理の try-catch が完結！
 
+        }
         // --- この下に生成ロジック（const mm = ... や forループ）が続く ---
             // 3. マルコフ文章生成
             const markovDict = {};
@@ -570,8 +573,8 @@ ${config.characterSetting}
             });
             console.log("本投稿が完了しました！");
 
-        } else {
-            console.log("TLに材料がないため投稿をスキップしました");
+        } else { // ★ エラーが出ていた 573行目あたりの else はここ！
+            post_content = "（タイムラインに材料がありません）";
         }
 
     } catch (e) {
