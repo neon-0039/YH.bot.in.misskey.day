@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "bot.js",
   "type": "module",
-  npm install tiny-segmenter googleapis,
+  "npm install tiny-segmenter googleapis",
   "dependencies": {
     "@google/generative-ai": "0.21.0",
     "misskey-js": "^0.0.15",
