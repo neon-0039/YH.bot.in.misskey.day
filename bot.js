@@ -435,6 +435,8 @@ ${config.characterSetting}
                 .slice(0, 64)
                 .join(" ");
             const words = segmenter.segment(tl_text);
+            // 記号判定用ヘルパー関数（エラー回避のためここで定義）
+            const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
             // 2. 外部ライブラリ (TinySegmenter) 分解
          // 3. Googleドライブへ蓄積
             if (words.length > 0) {
@@ -442,9 +444,12 @@ ${config.characterSetting}
                     console.log("JSONデータの冒頭5文字:", process.env.GDRIVE_SERVICE_ACCOUNT?.substring(0, 5));
                     const serviceAccount = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
                     // Secretsに保存したJSONをオブジェクトに変換
-                    // const serviceAccount = ... を以下のように変更
-                    const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
-
+                   let rawJson = process.env.GDRIVE_SERVICE_ACCOUNT.trim();
+                    // もし前後が引用符で囲まれていたら除去する
+                    if (rawJson.startsWith('"') && rawJson.endsWith('"')) {
+                        rawJson = rawJson.slice(1, -1);
+                    }
+                    const gDriveCreds = JSON.parse(rawJson);
                     const auth = new google.auth.JWT(
                         gDriveCreds.client_email, 
                         null,
