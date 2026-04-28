@@ -30,9 +30,9 @@ jobs:
       - name: Run bot
         run: node bot.js
         env:
-          GDRIVE_CLIENT_EMAIL: ${{ secrets.GDRIVE_CLIENT_EMAIL }}
-          GDRIVE_PRIVATE_KEY: ${{ secrets.GDRIVE_PRIVATE_KEY }}
+          GDRIVE_SERVICE_ACCOUNT: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
           GDRIVE_FILE_ID: ${{ secrets.GDRIVE_FILE_ID }}
+          # その他 Misskey のトークンなど
           # 他の環境変数もここに追加
           MK_DOMAIN: ${{ secrets.MK_DOMAIN }}
           MK_TOKEN: ${{ secrets.MK_TOKEN }}
