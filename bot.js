@@ -591,5 +591,3 @@ ${config.characterSetting}
 
 // 最後にしっかり実行
 main();
-// main関数の実行
-main();
