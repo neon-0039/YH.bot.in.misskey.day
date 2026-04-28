@@ -434,7 +434,7 @@ ${config.characterSetting}
                 .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
                 .slice(0, 64)
                 .join(" ");
-
+            const words = segmenter.segment(tl_text);
             // 2. 外部ライブラリ (TinySegmenter) 分解
          // 3. Googleドライブへ蓄積
             if (words.length > 0) {
