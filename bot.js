@@ -573,7 +573,7 @@ ${config.characterSetting}
             visibility: 'home' 
         });
         console.log("本投稿が完了しました！");
-
+    } catch (e) { console.error(e); }
     } else { // ★ if (words.length > 0) に対応する else
         const post_content = "（タイムラインに材料がありません）";
         console.log(post_content);
