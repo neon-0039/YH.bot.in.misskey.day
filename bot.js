@@ -22,7 +22,49 @@ const currentKey = (jstHour >= 12) ? keyMain : (keySub || keyMain);
 console.log(`Mainキーの長さ: ${keyMain?.length}, Subキーの長さ: ${keySub?.length}`);
 console.log(`【システム情報】現在時刻: ${jstHour}時 / 使用APIキー: ${jstHour >= 12 ? '午後(メイン)' : '午前(サブ)'}`);
 // 現在時刻に基づいて使用するキーを決定（日本時間 JST 基準）
+const { google } = require('googleapis');
 
+/**
+ * Google Drive APIへの認証を行う関数
+ */
+async function getDriveClient() {
+    // GitHub Secretsなどに保存した環境変数から読み込む
+    const credentials = {
+        client_email: process.env.GDRIVE_CLIENT_EMAIL,
+        // private_keyの改行コード（\n）を正しく処理する
+        private_key: process.env.GDRIVE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    };
+
+    const auth = new google.auth.JWT(
+        credentials.client_email,
+        null,
+        credentials.private_key,
+        ['https://www.googleapis.com/auth/drive'] // 操作権限のスコープ
+    );
+
+    return google.drive({ version: 'v3', auth });
+}
+/**
+ * 取得した語彙をGoogleドライブのtxtファイルに書き込む
+ * @param {string} fileId - 書き込み先txtファイルのID
+ * @param {string} content - 書き込む内容（単語リストなど）
+ */
+async function saveVocabularyToDrive(fileId, content) {
+    try {
+        const drive = await getDriveClient();
+        
+        await drive.files.update({
+            fileId: fileId,
+            media: {
+                mimeType: 'text/plain',
+                body: content
+            }
+        });
+        console.log("Googleドライブへの語彙蓄積に成功！");
+    } catch (e) {
+        console.error("Googleドライブ書き込みエラー:", e.message);
+    }
+}
 const config = {
     domain: process.env.MK_DOMAIN,
     token: process.env.MK_TOKEN,
@@ -379,24 +421,52 @@ ${config.characterSetting}
 
         try {
             const me = await mk.request('i');
-            console.log("マルコフ連鎖モード（進化版）で投稿を生成中です...");
+            const my_id = me.id;
+            console.log("マルコフ連鎖モード（外部ライブラリ解析版）起動！");
             
-            // タイムラインから材料を取得
+            // 1. タイムラインから材料を取得
             const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
             const tl_text = tl
-                .filter(n => n.text && n.user.id !== me.id)
+                .filter(n => n.text && n.user.id !== my_id)
                 .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
                 .slice(0, 64)
                 .join(" ");
 
-            // 1. 単語分解（半角カタカナ \uFF65-\uFF9F に対応！）
-            const regex = /[\u4E00-\u9FFF]+|[\u3040-\u309F]+|[\u30A0-\u30FF]+|[\uFF65-\uFF9F]+|[a-zA-Z0-9]+|[^\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F\sa-zA-Z0-9]+/g;
-            const words = tl_text.match(regex) || [];
-            
-            let post_content = "";
+            // 2. 外部ライブラリ (TinySegmenter) による単語分解
+            // ※あらかじめ const TinySegmenter = require('tiny-segmenter'); const segmenter = new TinySegmenter(); しておく
+            const words = segmenter.segment(tl_text);
+            console.log(`分解完了: ${words.length} 単語取得`);
 
+            // 3. Googleドライブへ分解した語彙を蓄積 (API接続)
             if (words.length > 0) {
-                // 2. マルコフ辞書の作成
+                try {
+                    const { google } = require('googleapis');
+                    const auth = new google.auth.JWT(
+                        process.env.GDRIVE_CLIENT_EMAIL,
+                        null,
+                        process.env.GDRIVE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                        ['https://www.googleapis.com/auth/drive']
+                    );
+                    const drive = google.drive({ version: 'v3', auth });
+                    const fileId = process.env.GDRIVE_FILE_ID; // 保存先txtのID
+
+                    // 現在のファイル内容を取得して追記する（または単純に上書き）
+                    await drive.files.update({
+                        fileId: fileId,
+                        media: {
+                            mimeType: 'text/plain',
+                            body: words.join(" ") + "\n" // スペース区切りで蓄積
+                        }
+                    });
+                    console.log("Googleドライブへの学習データ蓄積完了");
+                } catch (driveError) {
+                    console.log("Googleドライブ連携失敗（スキップ）:", driveError.message);
+                }
+            }
+
+            // 4. マルコフ辞書の作成（ここから後半の生成ロジックへ）
+            let post_content = "";
+            if (words.length > 0) {
                 const markovDict = {};
                 for (let i = 0; i < words.length - 1; i++) {
                     const w1 = words[i];
@@ -405,10 +475,7 @@ ${config.characterSetting}
                     markovDict[w1].push(w2);
                 }
 
-                // 記号判定用ヘルパー関数
-                const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
-
-                // 単語抽選関数（60%再抽選＆禁止ワード回避つき）
+                // --- 以降、後半の「pickNextWord」や「generated」の抽選ループに続く ---                // 単語抽選関数（60%再抽選＆禁止ワード回避つき）
                 const pickNextWord = (list) => {
                     if (!list || list.length === 0) return "";
                     let candidate = list[Math.floor(Math.random() * list.length)];
