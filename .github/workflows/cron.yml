@@ -24,12 +24,19 @@ jobs:
         # @latest を指定し、package-lockを無視して最新を入れ直します
         run: |
           npm install @google/generative-ai@0.21.0 misskey-js@latest axios
+      - name: Install dependencies
+        run: npm install
 
       - name: Run bot
+        run: node bot.js
         env:
+          GDRIVE_CLIENT_EMAIL: ${{ secrets.GDRIVE_CLIENT_EMAIL }}
+          GDRIVE_PRIVATE_KEY: ${{ secrets.GDRIVE_PRIVATE_KEY }}
+          GDRIVE_FILE_ID: ${{ secrets.GDRIVE_FILE_ID }}
+          # 他の環境変数もここに追加
           MK_DOMAIN: ${{ secrets.MK_DOMAIN }}
           MK_TOKEN: ${{ secrets.MK_TOKEN }}
           MK_TOKEN_ID: ${{ secrets.MK_TOKEN_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_SUB: ${{ secrets.GEMINI_API_KEY_SUB }}
-        run: node bot.js
+          run: node bot.js
