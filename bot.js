@@ -440,56 +440,65 @@ ${config.characterSetting}
         let brain = {};
         if (words.length > 0) {
             // 2. Googleドライブへ蓄積（学習）
+        try {
+            const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
+            const auth = new google.auth.JWT(
+                gDriveCreds.client_email, null, gDriveCreds.private_key,
+                ['https://www.googleapis.com/auth/drive']
+            );
+            const drive = google.drive({ version: 'v3', auth });
+            const fileId = process.env.GDRIVE_FILE_ID;
+
+            // 既存の脳を読み込み
             try {
-                const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
-                const auth = new google.auth.JWT(
-                    gDriveCreds.client_email, null, gDriveCreds.private_key,
-                    ['https://www.googleapis.com/auth/drive']
-                );
-                const drive = google.drive({ version: 'v3', auth });
-                const fileId = process.env.GDRIVE_FILE_ID;
-
-                // 既存の脳を読み込み
-                try {
-                    const res = await drive.files.get({ fileId, alt: 'media' });
-                    brain = (typeof res.data === 'object') ? res.data : JSON.parse(res.data || '{}');
-                } catch (e) {
-                    console.log("既存の脳がないため新規作成します");
-                }
-
-                // --- 改良版：半角カタカナの塊を抽出して学習 ---
-                const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
-                
-                for (let i = 0; i < words.length - 1; i++) {
-                    const current = words[i];
-                    let next = words[i + 1];
-
-                    if (particles.includes(current)) {
-                        if (!brain[current]) brain[current] = [];
-
-                        if (/^[\uFF65-\uFF9F]+$/.test(next)) {
-                            const fullBlock = kanaBlocks.find(block => block.startsWith(next));
-                            if (fullBlock) next = fullBlock; 
-                        }
-
-                        brain[current].push(next);
-                        if (brain[current].length > 20000) {
-                            brain[current].shift();
-                        }
-                    }
-                }
-
-                // --- 3. Googleドライブへ書き戻し ---
-                await drive.files.update({
-                    fileId: fileId,
-                    media: { mimeType: 'application/json', body: JSON.stringify(brain, null, 2) }
-                });
-                console.log("Googleドライブの『脳』をアップデート完了（上限2万件モード）");
-
-            } catch (driveError) {
-                // ドライブの処理（try）でエラーが起きたらここに来る
-                console.log("ドライブ連携に失敗（生成は続行）:", driveError.message);
+                const res = await drive.files.get({ fileId, alt: 'media' });
+                brain = (typeof res.data === 'object') ? res.data : JSON.parse(res.data || '{}');
+            } catch (e) {
+                console.log("既存の脳がないため新規作成します");
             }
+
+            // --- 改良版：半角カタカナの塊を抽出して学習 ---
+            const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
+            
+            for (let i = 0; i < words.length - 1; i++) {
+                const current = words[i];
+                let next = words[i + 1];
+
+                // 次の単語が「半角カタカナの断片」なら塊に復元
+                if (/^[\uFF65-\uFF9F]+$/.test(next)) {
+                    const fullBlock = kanaBlocks.find(block => block.startsWith(next));
+                    if (fullBlock) next = fullBlock; 
+                }
+
+                // --- 脳への記録処理 ---
+                // particles(助詞)に含まれるか、あるいは普通の名詞などの領域か
+                // どちらの場合でも brain[current] というキーで保存
+                if (!brain[current]) brain[current] = [];
+
+                // 重複して同じペアを覚えすぎないための簡易チェック（お好みで）
+                // if (!brain[current].includes(next) || Math.random() < 0.3) { 
+                brain[current].push(next);
+                // }
+
+                // 上限20,000件（各単語ごとのつながり上限）
+                if (brain[current].length > 20000) {
+                    brain[current].shift();
+                }
+            }
+
+            // --- 3. Googleドライブへ書き戻し ---
+            await drive.files.update({
+                fileId: fileId,
+                media: { 
+                    mimeType: 'application/json', 
+                    body: JSON.stringify(brain, null, 2) 
+                }
+            });
+            console.log("Googleドライブの『脳』をアップデート完了（全単語学習・上限2万件モード）");
+
+        } catch (driveError) {
+            console.log("ドライブ連携に失敗（生成は続行）:", driveError.message);
+        }
             // ↑ ここでドライブ処理の try-catch が完結！
 
         }
