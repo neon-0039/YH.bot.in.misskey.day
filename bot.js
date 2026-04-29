@@ -456,8 +456,14 @@ ${config.characterSetting}
                 
                 Object.keys(brain).forEach(key => {
                     // キー自体が汚れている（改行や全角スペースを含む）場合は削除対象にするため判定
-                    const isInvalidKey = key.includes('\n') || key.includes('　') || key.includes('<') || /:.*:/.test(key);
-                    
+                    const isInvalidKey = key.includes('\n') || 
+                        key.includes('\n') || 
+                        key.includes('　') || 
+                        key.includes('<') || 
+                        key.includes('\\')||
+                        key.includes('small')||
+                        key.includes('color')||
+                        /:.*:/.test(key);
                     let list = brain[key];
                     if (Array.isArray(list)) {
                         // リスト（次の単語候補）の中から条件に合うゴミを排除
@@ -465,7 +471,7 @@ ${config.characterSetting}
                             if (typeof w !== 'string') return false;
                             
                             // 排除条件：改行を含む、全角スペースを含む、タグ、コロン囲み(絵文字)
-                            if (w.includes('\n') || w.includes('　') || w.includes('<') || /:.*:/.test(w)) {
+                            if (w.includes('\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||/:.*:/.test(w)) {
                                 return false; 
                             }
                             
@@ -522,6 +528,9 @@ ${config.characterSetting}
                         next.includes('\n') || 
                         next.includes('　') || 
                         next.includes('<') || 
+                        next.includes('\\')||
+                        next.includes('small')||
+                        next.includes('color')||
                         /:.*:/.test(next) ||
                         next.trim() === ""
                     ) {
