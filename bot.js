@@ -451,43 +451,35 @@ ${config.characterSetting}
 
             // 既存の脳を読み込み
             try {
-                // --- 既存の脳のクリーニング（強化版） ---
+                // --- 既存の脳のクリーニング（一括大掃除） ---
+                console.log("既存の脳をスキャンしてゴミ（改行、タグ、絵文字、全角スペース）を掃除中...");
+                
                 Object.keys(brain).forEach(key => {
-                    // 1. まずキー（単語）自体がゴミ条件に合致するかチェック
-                    const isBadKey = key.includes('\n') || 
-                                   key.includes('　') || 
-                                   key.includes('</') || 
-                                   key.includes('<') || 
-                                   /:.*:/.test(key);
-
-                    if (isBadKey) {
-                        delete brain[key]; // 条件に合うキーは部屋ごと削除
-                        return;
-                    }
-
+                    // キー自体が汚れている（改行や全角スペースを含む）場合は削除対象にするため判定
+                    const isInvalidKey = key.includes('\n') || key.includes('　') || key.includes('<') || /:.*:/.test(key);
+                    
                     let list = brain[key];
                     if (Array.isArray(list)) {
-                        // 2. リストの中身を検閲
+                        // リスト（次の単語候補）の中から条件に合うゴミを排除
                         brain[key] = list.filter(w => {
                             if (typeof w !== 'string') return false;
                             
-                            // 削除条件：改行、全角スペース、タグ系、カスタム絵文字、空文字
-                            const isBadWord = w.includes('\n') || 
-                                            w.includes('　') || 
-                                            w.includes('</') || 
-                                            w.includes('<') || 
-                                            /:.*:/.test(w) || 
-                                            w.trim() === "";
+                            // 排除条件：改行を含む、全角スペースを含む、タグ、コロン囲み(絵文字)
+                            if (w.includes('\n') || w.includes('　') || w.includes('<') || /:.*:/.test(w)) {
+                                return false; 
+                            }
                             
-                            return !isBadWord; // ダメなワードじゃないものだけ残す
+                            // 前後を整えて空文字になったものも排除
+                            return w.trim() !== "";
                         });
                     }
                     
-                    // 3. 中身が空っぽになった部屋も消去
-                    if (!brain[key] || brain[key].length === 0) {
+                    // キーが不正、または中身が空になった部屋を削除
+                    if (isInvalidKey || !brain[key] || brain[key].length === 0) {
                         delete brain[key];
                     }
                 });
+                console.log("脳のクリーニング完了！");
             } catch (e) {
                 console.log("既存の脳がないため新規作成します");
             }
@@ -519,13 +511,22 @@ ${config.characterSetting}
 
             let learnCount = 0; // 学習したペア数をカウント
             
-            for (let i = 0; i < words.length - 1; i++) {
-                const current = words[i];
-                let next = words[i + 1];
-                // ★「次」が改行そのもの、または空白だけなら学習をスキップ
-                if (!next || next.replace(/\n/g, '').trim() === ""){
-                    continue;
-                }
+            // --- 強化版：学習ループ（登録時の最終検閲） ---
+                for (let i = 0; i < cleanedWords.length - 1; i++) {
+                    const current = cleanedWords[i];
+                    let next = cleanedWords[i + 1];
+
+                    // ★ 登録直前の最終チェック
+                    // 次の単語に改行、全角スペース、タグ、絵文字コードが含まれていたら学習をスキップ
+                    if (
+                        next.includes('\n') || 
+                        next.includes('　') || 
+                        next.includes('<') || 
+                        /:.*:/.test(next) ||
+                        next.trim() === ""
+                    ) {
+                        continue; // このペアは覚えない
+                    }
                 // 次の単語が「半角カタカナの断片」なら塊に復元
                 if (/^[\uFF65-\uFF9F]+$/.test(next)) {
                     const fullBlock = kanaBlocks.find(block => block.startsWith(next));
