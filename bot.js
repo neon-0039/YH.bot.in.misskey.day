@@ -481,8 +481,7 @@ ${config.characterSetting}
                 const cleanedWords = words
                     .map(w => w.replace(/\n/g, '').trim()) // \nを消して端の空白を削る
                     .filter(w => w !== "");               // 空っぽになった項目は捨てる
-            // ★「次」が改行そのもの、または空白だけなら学習をスキップ
-                    if (!next || next.replace(/\n/g, '').trim() === "") continue;
+            
             // 今回の分析スコアをログ出力
             console.log(`【分析実行】総単語数: ${words.length}個 / カタカナ塊: ${kanaBlocks.length}個`);
 
@@ -491,7 +490,10 @@ ${config.characterSetting}
             for (let i = 0; i < words.length - 1; i++) {
                 const current = words[i];
                 let next = words[i + 1];
-
+                // ★「次」が改行そのもの、または空白だけなら学習をスキップ
+                if (!next || next.replace(/\n/g, '').trim() === ""){
+                    continue;
+                }
                 // 次の単語が「半角カタカナの断片」なら塊に復元
                 if (/^[\uFF65-\uFF9F]+$/.test(next)) {
                     const fullBlock = kanaBlocks.find(block => block.startsWith(next));
