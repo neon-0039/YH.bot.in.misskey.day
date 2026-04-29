@@ -469,6 +469,10 @@ ${config.characterSetting}
                     const fullBlock = kanaBlocks.find(block => block.startsWith(next));
                     if (fullBlock) next = fullBlock; 
                 }
+                // 今回の分析スコアをログ出力
+                console.log(`【分析実行】総単語数: ${words.length}個 / カタカナ塊: ${kanaBlocks.length}個`);
+
+                let learnCount = 0; // 学習したペア数をカウント
 
                 // --- 脳への記録処理 ---
                 // particles(助詞)に含まれるか、あるいは普通の名詞などの領域か
