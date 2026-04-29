@@ -537,8 +537,8 @@ ${config.characterSetting}
                         next.includes('small')||
                         next.includes('color')||
                         next.includes('\\u')||
-                        next.includes(':')
-                        next.includes('_')
+                        next.includes(':')||
+                        next.includes('_')||
                         next.trim() === ""
                     ) {
                         continue; // このペアは覚えない
