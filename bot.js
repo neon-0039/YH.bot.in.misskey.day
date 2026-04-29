@@ -451,22 +451,40 @@ ${config.characterSetting}
 
             // 既存の脳を読み込み
             try {
-                const res = await drive.files.get({ fileId, alt: 'media' });
-                brain = (typeof res.data === 'object') ? res.data : JSON.parse(res.data || '{}');
-                // --- 既存の脳のクリーニング ---
+                // --- 既存の脳のクリーニング（強化版） ---
                 Object.keys(brain).forEach(key => {
+                    // 1. まずキー（単語）自体がゴミ条件に合致するかチェック
+                    const isBadKey = key.includes('\n') || 
+                                   key.includes('　') || 
+                                   key.includes('</') || 
+                                   key.includes('<') || 
+                                   /:.*:/.test(key);
+
+                    if (isBadKey) {
+                        delete brain[key]; // 条件に合うキーは部屋ごと削除
+                        return;
+                    }
+
                     let list = brain[key];
                     if (Array.isArray(list)) {
-                        // リストの中から「改行だけ」のやつや「空文字」を完全に消す
+                        // 2. リストの中身を検閲
                         brain[key] = list.filter(w => {
-                            if (typeof w !== 'string') return true;
-                            const cleaned = w.replace(/\n/g, '').trim();
-                            return cleaned !== ""; // 空っぽなら削除
+                            if (typeof w !== 'string') return false;
+                            
+                            // 削除条件：改行、全角スペース、タグ系、カスタム絵文字、空文字
+                            const isBadWord = w.includes('\n') || 
+                                            w.includes('　') || 
+                                            w.includes('</') || 
+                                            w.includes('<') || 
+                                            /:.*:/.test(w) || 
+                                            w.trim() === "";
+                            
+                            return !isBadWord; // ダメなワードじゃないものだけ残す
                         });
                     }
                     
-                    // ついでに空になった部屋（キー）も消しておく
-                    if (brain[key].length === 0) {
+                    // 3. 中身が空っぽになった部屋も消去
+                    if (!brain[key] || brain[key].length === 0) {
                         delete brain[key];
                     }
                 });
@@ -478,10 +496,24 @@ ${config.characterSetting}
             const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
 
             // ★ ここで「\n」を削除 & ついでに前後から空白も削る
+            // --- 強化版：不要な文字列のクリーニングと排除 ---
                 const cleanedWords = words
-                    .map(w => w.replace(/\n/g, '').trim()) // \nを消して端の空白を削る
-                    .filter(w => w !== "");               // 空っぽになった項目は捨てる
-            
+                    .map(w => {
+                        let cleaned = w.replace(/\n/g, '').trim(); // 改行削除と端の空白削除
+                        
+                        // 1. 一部にでも「\n」が含まれる場合、あるいは「 」（全角スペース）を排除
+                        if (w.includes('\n') || w.includes('　')) return "";
+                        
+                        // 2. 「</」または「<」を含む（HTMLタグ系）を排除
+                        if (w.includes('</') || w.includes('<')) return "";
+                        
+                        // 3. 「:」に囲まれている文字列（カスタム絵文字 :emoji: など）を排除
+                        // ※正規表現 /:.*:/ は「:」で始まり「:」で終わる文字列にマッチします
+                        if (/:.*:/.test(w)) return "";
+                        
+                        return cleaned;
+                    })
+                    .filter(w => w !== ""); // 上記で "" になったゴミをすべて捨てる
             // 今回の分析スコアをログ出力
             console.log(`【分析実行】総単語数: ${words.length}個 / カタカナ塊: ${kanaBlocks.length}個`);
 
