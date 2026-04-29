@@ -453,12 +453,38 @@ ${config.characterSetting}
             try {
                 const res = await drive.files.get({ fileId, alt: 'media' });
                 brain = (typeof res.data === 'object') ? res.data : JSON.parse(res.data || '{}');
+                // --- 既存の脳（保存済みデータ）の掃除ロジック ---
+                console.log("古い脳のゴミ（改行）を掃除中...");
+                Object.keys(brain).forEach(key => {
+                    // 1. キー自体に改行が入っている場合、改行なしのキーへ移行
+                    const cleanKey = key.replace(/\n/g, '').trim();
+                    
+                    // 2. 中身のリスト（配列）内の改行を削除
+                    let list = brain[key];
+                    if (Array.isArray(list)) {
+                        brain[key] = list
+                            .map(w => (typeof w === 'string' ? w.replace(/\n/g, '').trim() : w))
+                            .filter(w => w !== "");
+                    }
+
+                    // キーが改行のせいで汚れていた場合は、中身を移して古い方を消す
+                    if (cleanKey !== key) {
+                        brain[cleanKey] = (brain[cleanKey] || []).concat(brain[key]);
+                        delete brain[key];
+                    }
+                });
+                console.log("脳のクリーニング完了！");
             } catch (e) {
                 console.log("既存の脳がないため新規作成します");
             }
 
             // --- 改良版：半角カタカナの塊を抽出して学習 ---
             const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
+
+            // ★ ここで「\n」を削除 & ついでに前後から空白も削る
+                const cleanedWords = words
+                    .map(w => w.replace(/\n/g, '').trim()) // \nを消して端の空白を削る
+                    .filter(w => w !== "");               // 空っぽになった項目は捨てる
             
             // 今回の分析スコアをログ出力
             console.log(`【分析実行】総単語数: ${words.length}個 / カタカナ塊: ${kanaBlocks.length}個`);
