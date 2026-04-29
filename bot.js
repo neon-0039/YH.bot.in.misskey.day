@@ -457,12 +457,15 @@ ${config.characterSetting}
                 Object.keys(brain).forEach(key => {
                     // キー自体が汚れている（改行や全角スペースを含む）場合は削除対象にするため判定
                     const isInvalidKey = key.includes('\n') || 
-                        key.includes('\n') || 
+                        key.includes('\\n') || 
                         key.includes('　') || 
                         key.includes('<') || 
                         key.includes('\\')||
                         key.includes('small')||
                         key.includes('color')||
+                        key.includes('\\u')||
+                        key.includes(':')||
+                        key.includes('_')||
                         /:.*:/.test(key);
                     let list = brain[key];
                     if (Array.isArray(list)) {
@@ -471,7 +474,7 @@ ${config.characterSetting}
                             if (typeof w !== 'string') return false;
                             
                             // 排除条件：改行を含む、全角スペースを含む、タグ、コロン囲み(絵文字)
-                            if (w.includes('\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||/:.*:/.test(w)) {
+                            if (w.includes('\\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')) {
                                 return false; 
                             }
                             
@@ -500,10 +503,12 @@ ${config.characterSetting}
                         let cleaned = w.replace(/\n/g, '').trim(); // 改行削除と端の空白削除
                         
                         // 1. 一部にでも「\n」が含まれる場合、あるいは「 」（全角スペース）を排除
-                        if (w.includes('\n') || w.includes('　')) return "";
+                        if (w.includes('\\n') || w.includes('　')) return "";
                         
                         // 2. 「</」または「<」を含む（HTMLタグ系）を排除
                         if (w.includes('</') || w.includes('<')) return "";
+                        if (w.includes('\\u') || w.includes(':')) return "";
+                        if (w.includes('_')) return "";
                         
                         // 3. 「:」に囲まれている文字列（カスタム絵文字 :emoji: など）を排除
                         // ※正規表現 /:.*:/ は「:」で始まり「:」で終わる文字列にマッチします
@@ -525,13 +530,15 @@ ${config.characterSetting}
                     // ★ 登録直前の最終チェック
                     // 次の単語に改行、全角スペース、タグ、絵文字コードが含まれていたら学習をスキップ
                     if (
-                        next.includes('\n') || 
+                        next.includes('\\n') || 
                         next.includes('　') || 
                         next.includes('<') || 
                         next.includes('\\')||
                         next.includes('small')||
                         next.includes('color')||
-                        /:.*:/.test(next) ||
+                        next.includes('\\u')||
+                        next.includes(':')
+                        next.includes('_')
                         next.trim() === ""
                     ) {
                         continue; // このペアは覚えない
