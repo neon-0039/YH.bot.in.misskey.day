@@ -465,6 +465,8 @@ ${config.characterSetting}
                         key.includes('color')||
                         key.includes('\\u')||
                         key.includes(':')||
+                        /[\uD800-\uDBFF]/.test(key) ||         // サロゲートペアの上位（死骸1）
+                        /[\uDC00-\uDFFF]/.test(key) ||         // サロゲートペアの下位（死骸2）
                         key.includes('_')||
                         /:.*:/.test(key);
                     let list = brain[key];
@@ -474,7 +476,7 @@ ${config.characterSetting}
                             if (typeof w !== 'string') return false;
                             
                             // 排除条件：改行を含む、全角スペースを含む、タグ、コロン囲み(絵文字)
-                            if (w.includes('\\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')) {
+                            if (w.includes('\\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w) ||/[\uDC00-\uDFFF]/.test(w) ||) {
                                 return false; 
                             }
                             
@@ -509,6 +511,7 @@ ${config.characterSetting}
                         if (w.includes('</') || w.includes('<')) return "";
                         if (w.includes('\\u') || w.includes(':')) return "";
                         if (w.includes('_')) return "";
+                        if(/[\uD800-\uDBFF]/.test(w) ||/[\uDC00-\uDFFF]/.test(w))return;         // サロゲートペアの下位（死骸2）)
                         
                         // 3. 「:」に囲まれている文字列（カスタム絵文字 :emoji: など）を排除
                         // ※正規表現 /:.*:/ は「:」で始まり「:」で終わる文字列にマッチします
@@ -539,6 +542,8 @@ ${config.characterSetting}
                         next.includes('\\u')||
                         next.includes(':')||
                         next.includes('_')||
+                        /[\uD800-\uDBFF]/.test(next) ||
+                        /[\uDC00-\uDFFF]/.test(next) ||
                         next.trim() === ""
                     ) {
                         continue; // このペアは覚えない
