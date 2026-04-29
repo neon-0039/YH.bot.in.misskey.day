@@ -511,7 +511,7 @@ ${config.characterSetting}
                         if (w.includes('</') || w.includes('<')) return "";
                         if (w.includes('\\u') || w.includes(':')) return "";
                         if (w.includes('_')) return "";
-                        if(/[\uD800-\uDBFF]/.test(w) ||/[\uDC00-\uDFFF]/.test(w))return;         // サロゲートペアの下位（死骸2）)
+                        if(/[\uD800-\uDBFF]/.test(w) ||/[\uDC00-\uDFFF]/.test(w)) return "";         // サロゲートペアの下位（死骸2）)
                         
                         // 3. 「:」に囲まれている文字列（カスタム絵文字 :emoji: など）を排除
                         // ※正規表現 /:.*:/ は「:」で始まり「:」で終わる文字列にマッチします
