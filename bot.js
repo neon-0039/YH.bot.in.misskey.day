@@ -578,7 +578,7 @@ ${config.characterSetting}
             // --- 3. マルコフ文章生成 ---
         const markovDict = {};
         // ここが n になっていたので修正（words.length - 1 まで回すのが正解）
-        for (let i = 0; i < n ; i++) {
+        for (let i = 0; i < n+8 ; i++) {
             const w1 = words[i];
             const w2 = words[i + 1];
             if (!markovDict[w1]) markovDict[w1] = [];
@@ -627,22 +627,6 @@ ${config.characterSetting}
 
             generated += current_word;
             if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
-        }
-
-        // 4. 半角カタカナ特殊付与
-        if (Math.random() < 0.2) {
-            const kanaWords = words.filter(w => /^[\uFF65-\uFF9F]+$/.test(w));
-            if (kanaWords.length > 0) {
-                let suffix = kanaWords[Math.floor(Math.random() * kanaWords.length)];
-                if (!/(マルコフ|おみくじ|タイムライン|@|#)/.test(suffix)) {
-                    if (generated.length > 2 && Math.random() < 0.5) {
-                        const pos = generated.length - 1;
-                        generated = generated.slice(0, pos) + suffix + generated.slice(pos);
-                    } else {
-                        generated += suffix;
-                    }
-                }
-            }
         }
 
         const post_content = generated || "（言葉の断片が見つかりませんでした）";
