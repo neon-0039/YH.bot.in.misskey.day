@@ -453,27 +453,23 @@ ${config.characterSetting}
             try {
                 const res = await drive.files.get({ fileId, alt: 'media' });
                 brain = (typeof res.data === 'object') ? res.data : JSON.parse(res.data || '{}');
-                // --- 既存の脳（保存済みデータ）の掃除ロジック ---
-                console.log("古い脳のゴミ（改行）を掃除中...");
+                // --- 既存の脳のクリーニング ---
                 Object.keys(brain).forEach(key => {
-                    // 1. キー自体に改行が入っている場合、改行なしのキーへ移行
-                    const cleanKey = key.replace(/\n/g, '').trim();
-                    
-                    // 2. 中身のリスト（配列）内の改行を削除
                     let list = brain[key];
                     if (Array.isArray(list)) {
-                        brain[key] = list
-                            .map(w => (typeof w === 'string' ? w.replace(/\n/g, '').trim() : w))
-                            .filter(w => w !== "");
+                        // リストの中から「改行だけ」のやつや「空文字」を完全に消す
+                        brain[key] = list.filter(w => {
+                            if (typeof w !== 'string') return true;
+                            const cleaned = w.replace(/\n/g, '').trim();
+                            return cleaned !== ""; // 空っぽなら削除
+                        });
                     }
-
-                    // キーが改行のせいで汚れていた場合は、中身を移して古い方を消す
-                    if (cleanKey !== key) {
-                        brain[cleanKey] = (brain[cleanKey] || []).concat(brain[key]);
+                    
+                    // ついでに空になった部屋（キー）も消しておく
+                    if (brain[key].length === 0) {
                         delete brain[key];
                     }
                 });
-                console.log("脳のクリーニング完了！");
             } catch (e) {
                 console.log("既存の脳がないため新規作成します");
             }
@@ -485,7 +481,8 @@ ${config.characterSetting}
                 const cleanedWords = words
                     .map(w => w.replace(/\n/g, '').trim()) // \nを消して端の空白を削る
                     .filter(w => w !== "");               // 空っぽになった項目は捨てる
-            
+            // ★「次」が改行そのもの、または空白だけなら学習をスキップ
+                    if (!next || next.replace(/\n/g, '').trim() === "") continue;
             // 今回の分析スコアをログ出力
             console.log(`【分析実行】総単語数: ${words.length}個 / カタカナ塊: ${kanaBlocks.length}個`);
 
