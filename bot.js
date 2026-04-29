@@ -476,7 +476,7 @@ ${config.characterSetting}
                             if (typeof w !== 'string') return false;
                             
                             // 排除条件：改行を含む、全角スペースを含む、タグ、コロン囲み(絵文字)
-                            if (w.includes('\\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w) ||/[\uDC00-\uDFFF]/.test(w) ||) {
+                            if (w.includes('\\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)) {
                                 return false; 
                             }
                             
