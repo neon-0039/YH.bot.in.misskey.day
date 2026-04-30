@@ -670,45 +670,35 @@ ${config.characterSetting}
             if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
         }
 
-// --- 投稿内容の最終調整 ---
-        // あなたのコードでは生成された文章は「generated」に入っているので、ここを修正！
-        let finalMessage = generated || "（言葉の断片が見つかりませんでした）";
+// 1. 生成された rawデータを一旦受け取る（変数がなければここで宣言）
+        let outputText = generated || "（言葉の断片が見つかりませんでした）";
 
-        // 1. ゴミ掃除（カスタム絵文字、半角スペース、タグ、バックスラッシュ系を削除）
-        finalMessage = finalMessage
-            .replace(/:.*?:/g, '')     // カスタム絵文字を削除
-            .replace(/ /g, '')         // 半角スペースを削除
-            .replace(/<.*?>/g, '')     // HTMLタグを削除
-            .replace(/\\u[0-9a-fA-F]{4}/g, '') // \uXXXX 形式を削除
-            .replace(/\\/g, '')        // 残ったバックスラッシュを削除
+        // 2. ゴミ掃除（絵文字死骸、タグ、バックスラッシュ、スペースを根こそぎ消す）
+        outputText = outputText
+            .replace(/:.*?:/g, '')
+            .replace(/[ 　]/g, '') // 半角・全角スペース両方
+            .replace(/<.*?>/g, '')
+            .replace(/\\u[0-9a-fA-F]{4}/g, '')
+            .replace(/\\/g, '')
             .trim();
 
-        // 2. 短くなりすぎ判定（10文字以下なら継ぎ足し）
-        const MIN_LENGTH = 10; 
+        // 3. 短くなりすぎたら継ぎ足し
+        const MIN_LENGTH = 10;
         let retryCount = 0;
-
-        // finalMessageが空っぽ、または短すぎる場合にループ
-        while ((!finalMessage || finalMessage.length < MIN_LENGTH) && retryCount < 5) {
-            console.log(`文章が短い（${finalMessage.length}字）ため、継ぎ足しを試行します...`);
-            
-            // 文末の2文字をヒントにする（空ならランダムな言葉から開始）
-            const hint = finalMessage.length > 0 ? finalMessage.slice(-2) : words[Math.floor(Math.random() * words.length)];
-            const extra = generateAddition(hint, brain); 
-            
-            if (!extra) break; 
-            
-            // 継ぎ足し分も掃除してから合体
-            finalMessage += extra.replace(/:.*?:/g, '').replace(/ /g, '').trim();
+        while (outputText.length < MIN_LENGTH && retryCount < 5) {
+            const hint = outputText.length > 0 ? outputText.slice(-2) : pickNextWord(words);
+            const nextAddition = generateAddition(hint, brain); 
+            if (!nextAddition) break; 
+            // 継ぎ足し分も掃除して合体
+            outputText += nextAddition.replace(/:.*?:/g, '').replace(/[ 　]/g, '').trim();
             retryCount++;
         }
-        // --- テスト実行ラベルの付与 ---
-        const now = new Date();
-        const minutes = now.getMinutes();
-        let displayMessage = post_content;
 
-        // 0分でも30分でもない場合は「【テスト実行】」を付与
-        if (minutes !== 0 && minutes !== 30) {
-            displayMessage = `【テスト実行】${post_content}`;
+        // 4. 【手動実行の検知】
+        // GitHub環境変数を確認。手動(workflow_dispatch)ならラベルを付与
+        const eventName = process.env.GITHUB_EVENT_NAME; 
+        if (eventName === 'workflow_dispatch') {
+            outputText = `【手動実行】${outputText}`;
         }
         // --- 5. 投稿実行 ---
         // 最終的に掃除＆継ぎ足しが終わった「finalMessage」を投稿する
