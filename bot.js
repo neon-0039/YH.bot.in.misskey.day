@@ -448,7 +448,7 @@ ${config.characterSetting}
         const my_id = me.id;
         console.log("マルコフ連鎖モード起動！");
         
-        // 1. タイムラインから材料を取得
+// 1. タイムラインから材料を取得
         const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
         const tl_text = tl
             .filter(n => n.text && n.user.id !== my_id)
@@ -474,11 +474,21 @@ ${config.characterSetting}
 
             // 既存の脳を読み込み
             try {
+                // ★追加：ドライブから既存の脳をダウンロード
+                const res = await drive.files.get({
+                    fileId: fileId,
+                    alt: 'media'
+                });
+                brain = res.data;
+                
+                // ★追加：現在の語数を表示
+                const wordCount = Object.keys(brain).length;
+                console.log(`現在の脳の蓄積語数: ${wordCount}語`);
+
                 // --- 既存の脳のクリーニング（一括大掃除） ---
                 console.log("既存の脳をスキャンしてゴミ（改行、タグ、絵文字、全角スペース）を掃除中...");
                 
                 Object.keys(brain).forEach(key => {
-                    // キー自体が汚れている（改行や全角スペースを含む）場合は削除対象にするため判定
                     const isInvalidKey = key.includes('\n') || 
                         key.includes('\\n') || 
                         key.includes('　') || 
@@ -488,27 +498,22 @@ ${config.characterSetting}
                         key.includes('color')||
                         key.includes('\\u')||
                         key.includes(':')||
-                        /[\uD800-\uDBFF]/.test(key) ||         // サロゲートペアの上位（死骸1）
-                        /[\uDC00-\uDFFF]/.test(key) ||         // サロゲートペアの下位（死骸2）
+                        /[\uD800-\uDBFF]/.test(key) ||
+                        /[\uDC00-\uDFFF]/.test(key) ||
                         key.includes('_')||
                         /:.*:/.test(key);
+
                     let list = brain[key];
                     if (Array.isArray(list)) {
-                        // リスト（次の単語候補）の中から条件に合うゴミを排除
                         brain[key] = list.filter(w => {
                             if (typeof w !== 'string') return false;
-                            
-                            // 排除条件：改行を含む、全角スペースを含む、タグ、コロン囲み(絵文字)
                             if (w.includes('\\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)) {
                                 return false; 
                             }
-                            
-                            // 前後を整えて空文字になったものも排除
                             return w.trim() !== "";
                         });
                     }
                     
-                    // キーが不正、または中身が空になった部屋を削除
                     if (isInvalidKey || !brain[key] || brain[key].length === 0) {
                         delete brain[key];
                     }
@@ -516,6 +521,7 @@ ${config.characterSetting}
                 console.log("脳のクリーニング完了！");
             } catch (e) {
                 console.log("既存の脳がないため新規作成します");
+                brain = {}; // 読み込めなかった場合は空から開始
             }
 
             // --- 改良版：半角カタカナの塊を抽出して学習 ---
