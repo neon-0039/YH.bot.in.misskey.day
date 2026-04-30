@@ -565,7 +565,7 @@ ${config.characterSetting}
                 // }
 
                 // 上限20,000件（各単語ごとのつながり上限）
-                if (brain[current].length > 100000) {
+                if (brain[current].length > 10000000) {
                     brain[current].shift();
                 }
             }
