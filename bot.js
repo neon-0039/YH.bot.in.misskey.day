@@ -664,44 +664,46 @@ ${config.characterSetting}
             if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) break;
         }
 
-        const post_content = generated || "（言葉の断片が見つかりませんでした）";
-        // --- 投稿内容の最終調整 ---
-                let finalMessage = generatedText;
+// --- 投稿内容の最終調整 ---
+        // あなたのコードでは生成された文章は「generated」に入っているので、ここを修正！
+        let finalMessage = generated || "（言葉の断片が見つかりませんでした）";
 
-                // 1. ゴミ掃除（カスタム絵文字、半角スペース、タグ、バックスラッシュ系を削除）
-                finalMessage = finalMessage
-                    .replace(/:.*?:/g, '')     // カスタム絵文字を削除
-                    .replace(/ /g, '')         // 半角スペースを削除
-                    .replace(/<.*?>/g, '')     // HTMLタグを削除
-                    .replace(/\\u[0-9a-fA-F]{4}/g, '') // \uXXXX 形式を削除
-                    .trim();
+        // 1. ゴミ掃除（カスタム絵文字、半角スペース、タグ、バックスラッシュ系を削除）
+        finalMessage = finalMessage
+            .replace(/:.*?:/g, '')     // カスタム絵文字を削除
+            .replace(/ /g, '')         // 半角スペースを削除
+            .replace(/<.*?>/g, '')     // HTMLタグを削除
+            .replace(/\\u[0-9a-fA-F]{4}/g, '') // \uXXXX 形式を削除
+            .replace(/\\/g, '')        // 残ったバックスラッシュを削除
+            .trim();
 
-                // 2. 短くなりすぎ判定（例：5文字以下なら継ぎ足し）
-                // ※ ここで「生成と同様の操作」をループさせて長さを確保する
-                const MIN_LENGTH = 10; // 最低でもこれくらいの長さは欲しい！という文字数
-                let retryCount = 0;
+        // 2. 短くなりすぎ判定（10文字以下なら継ぎ足し）
+        const MIN_LENGTH = 10; 
+        let retryCount = 0;
 
-                while (finalMessage.length < MIN_LENGTH && retryCount < 5) {
-                    console.log(`文章が短い（${finalMessage.length}字）ため、継ぎ足しを試行します...`);
-                    
-                    // 文末の単語を取得して、そこから新しい続きを生成
-                    // ※ ここは既存の生成関数（generateTextなど）を再利用するか、
-                    // 文末の1語をキーにして脳から次の言葉を引っ張ってくる処理を書きます
-                    const lastWord = finalMessage.slice(-2); // 直近の2文字をヒントにする（簡易版）
-                    const nextAddition = generateAddition(lastWord, brain); 
-                    
-                    if (!nextAddition) break; // 続きが見つからなければ諦める
-                    
-                    finalMessage += nextAddition;
-                    retryCount++;
-                }
+        // finalMessageが空っぽ、または短すぎる場合にループ
+        while ((!finalMessage || finalMessage.length < MIN_LENGTH) && retryCount < 5) {
+            console.log(`文章が短い（${finalMessage.length}字）ため、継ぎ足しを試行します...`);
+            
+            // 文末の2文字をヒントにする（空ならランダムな言葉から開始）
+            const hint = finalMessage.length > 0 ? finalMessage.slice(-2) : words[Math.floor(Math.random() * words.length)];
+            const extra = generateAddition(hint, brain); 
+            
+            if (!extra) break; 
+            
+            // 継ぎ足し分も掃除してから合体
+            finalMessage += extra.replace(/:.*?:/g, '').replace(/ /g, '').trim();
+            retryCount++;
+        }
+
         // --- 5. 投稿実行 ---
+        // 最終的に掃除＆継ぎ足しが終わった「finalMessage」を投稿する
         await sleep(12000);
         await mk.request('notes/create', { 
-            text: post_content.trim().slice(0, 110),
+            text: finalMessage.trim().slice(0, 110),
             visibility: 'home' 
         });
-        console.log("本投稿が完了しました！");
+        console.log("本投稿が完了しました！内容: " + finalMessage);
 
     } catch (e) {
         // 全体的なエラーハンドリング
