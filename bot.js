@@ -701,13 +701,13 @@ ${config.characterSetting}
             outputText = `【手動実行】${outputText}`;
         }
         // --- 5. 投稿実行 ---
-        // 最終的に掃除＆継ぎ足しが終わった「finalMessage」を投稿する
+        // 最終的に掃除＆継ぎ足しが終わった「outputText 」を投稿する
         await sleep(12000);
         await mk.request('notes/create', { 
-            text: finalMessage.trim().slice(0, 110),
+            text: outputText .trim().slice(0, 110),
             visibility: 'home' 
         });
-        console.log("本投稿が完了しました！内容: " + finalMessage);
+        console.log("本投稿が完了しました！内容: " + outputText );
 
     } catch (e) {
         // 全体的なエラーハンドリング
