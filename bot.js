@@ -498,6 +498,7 @@ ${config.characterSetting}
                         key.includes('color')||
                         key.includes('\\u')||
                         key.includes(':')||
+                        key.includes('@')||
                         /[\uD800-\uDBFF]/.test(key) ||
                         /[\uDC00-\uDFFF]/.test(key) ||
                         key.includes('_')||
@@ -507,7 +508,7 @@ ${config.characterSetting}
                     if (Array.isArray(list)) {
                         brain[key] = list.filter(w => {
                             if (typeof w !== 'string') return false;
-                            if (w.includes('\\n') || w.includes('　') || w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)) {
+                            if (w.includes('\\n') || w.includes('　') || w..includes('@')||w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)) {
                                 return false; 
                             }
                             return w.trim() !== "";
@@ -539,7 +540,7 @@ ${config.characterSetting}
                         // 2. 「</」または「<」を含む（HTMLタグ系）を排除
                         if (w.includes('</') || w.includes('<')) return "";
                         if (w.includes('\\u') || w.includes(':')) return "";
-                        if (w.includes('_')) return "";
+                        if (w.includes('_')||w.includes('@')) return "";
                         if(/[\uD800-\uDBFF]/.test(w) ||/[\uDC00-\uDFFF]/.test(w)) return "";         // サロゲートペアの下位（死骸2）)
                         
                         // 3. 「:」に囲まれている文字列（カスタム絵文字 :emoji: など）を排除
@@ -571,6 +572,7 @@ ${config.characterSetting}
                         next.includes('\\u')||
                         next.includes(':')||
                         next.includes('_')||
+                        next.includes('@')||
                         /[\uD800-\uDBFF]/.test(next) ||
                         /[\uDC00-\uDFFF]/.test(next) ||
                         next.trim() === ""
