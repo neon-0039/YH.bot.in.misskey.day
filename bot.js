@@ -50,6 +50,28 @@ async function getDriveClient() {
 
     return google.drive({ version: 'v3', auth });
 }
+function generateAddition(startWord, brain) {
+    let current = startWord;
+    let addition = "";
+    
+    // 脳のキーの中から、今の文末を含んでいるものを探す
+    const keys = Object.keys(brain).filter(k => startWord.includes(k) || k.includes(startWord));
+    if (keys.length === 0) return "";
+    
+    let key = keys[Math.floor(Math.random() * keys.length)];
+    
+    for (let i = 0; i < 5; i++) { // 最大5語まで継ぎ足す
+        const nextList = brain[key];
+        if (!nextList || nextList.length === 0) break;
+        
+        const nextWord = nextList[Math.floor(Math.random() * nextList.length)];
+        addition += nextWord;
+        key = nextWord;
+    }
+    
+    // 継ぎ足し分も一応掃除しておく
+    return addition.replace(/:.*?:/g, '').replace(/ /g, '').trim();
+}
 /**
  * 取得した語彙をGoogleドライブのtxtファイルに書き込む
  * @param {string} fileId - 書き込み先txtファイルのID
@@ -694,28 +716,6 @@ ${config.characterSetting}
             console.error("エラー通知にも失敗しました");
         }
     }
-    function generateAddition(startWord, brain) {
-    let current = startWord;
-    let addition = "";
-    
-    // 脳のキーの中から、今の文末を含んでいるものを探す
-    const keys = Object.keys(brain).filter(k => startWord.includes(k) || k.includes(startWord));
-    if (keys.length === 0) return "";
-    
-    let key = keys[Math.floor(Math.random() * keys.length)];
-    
-    for (let i = 0; i < 7; i++) { // 最大5語まで継ぎ足す
-        const nextList = brain[key];
-        if (!nextList || nextList.length === 0) break;
-        
-        const nextWord = nextList[Math.floor(Math.random() * nextList.length)];
-        addition += nextWord;
-        key = nextWord;
-    }
-    
-    // 継ぎ足し分も一応掃除しておく
-    return addition.replace(/:.*?:/g, '').replace(/ /g, '').trim();
-}
 }
 
 // 最後にしっかり実行
