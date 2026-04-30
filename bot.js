@@ -701,7 +701,15 @@ ${config.characterSetting}
             finalMessage += extra.replace(/:.*?:/g, '').replace(/ /g, '').trim();
             retryCount++;
         }
+        // --- テスト実行ラベルの付与 ---
+        const now = new Date();
+        const minutes = now.getMinutes();
+        let displayMessage = post_final;
 
+        // 0分でも30分でもない場合は「【テスト実行】」を付与
+        if (minutes !== 0 && minutes !== 30) {
+            displayMessage = `【テスト実行】${post_final}`;
+        }
         // --- 5. 投稿実行 ---
         // 最終的に掃除＆継ぎ足しが終わった「finalMessage」を投稿する
         await sleep(12000);
