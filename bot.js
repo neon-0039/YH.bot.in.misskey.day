@@ -508,7 +508,7 @@ ${config.characterSetting}
                     if (Array.isArray(list)) {
                         brain[key] = list.filter(w => {
                             if (typeof w !== 'string') return false;
-                            if (w.includes('\\n') || w.includes('　') || w..includes('@')||w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)) {
+                            if (w.includes('\\n') || w.includes('　') || w.includes('@')||w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)) {
                                 return false; 
                             }
                             return w.trim() !== "";
