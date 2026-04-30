@@ -71,6 +71,28 @@ async function saveVocabularyToDrive(fileId, content) {
         console.error("Googleドライブ書き込みエラー:", e.message);
     }
 }
+function generateAddition(startWord, brain) {
+    let current = startWord;
+    let addition = "";
+    
+    // 脳のキーの中から、今の文末を含んでいるものを探す
+    const keys = Object.keys(brain).filter(k => startWord.includes(k) || k.includes(startWord));
+    if (keys.length === 0) return "";
+    
+    let key = keys[Math.floor(Math.random() * keys.length)];
+    
+    for (let i = 0; i < 5; i++) { // 最大5語まで継ぎ足す
+        const nextList = brain[key];
+        if (!nextList || nextList.length === 0) break;
+        
+        const nextWord = nextList[Math.floor(Math.random() * nextList.length)];
+        addition += nextWord;
+        key = nextWord;
+    }
+    
+    // 継ぎ足し分も一応掃除しておく
+    return addition.replace(/:.*?:/g, '').replace(/ /g, '').trim();
+}
 const config = {
     domain: process.env.MK_DOMAIN,
     token: process.env.MK_TOKEN,
@@ -642,7 +664,36 @@ ${config.characterSetting}
         }
 
         const post_content = generated || "（言葉の断片が見つかりませんでした）";
+        // --- 投稿内容の最終調整 ---
+                let finalMessage = generatedText;
 
+                // 1. ゴミ掃除（カスタム絵文字、半角スペース、タグ、バックスラッシュ系を削除）
+                finalMessage = finalMessage
+                    .replace(/:.*?:/g, '')     // カスタム絵文字を削除
+                    .replace(/ /g, '')         // 半角スペースを削除
+                    .replace(/<.*?>/g, '')     // HTMLタグを削除
+                    .replace(/\\u[0-9a-fA-F]{4}/g, '') // \uXXXX 形式を削除
+                    .trim();
+
+                // 2. 短くなりすぎ判定（例：5文字以下なら継ぎ足し）
+                // ※ ここで「生成と同様の操作」をループさせて長さを確保する
+                const MIN_LENGTH = 10; // 最低でもこれくらいの長さは欲しい！という文字数
+                let retryCount = 0;
+
+                while (finalMessage.length < MIN_LENGTH && retryCount < 5) {
+                    console.log(`文章が短い（${finalMessage.length}字）ため、継ぎ足しを試行します...`);
+                    
+                    // 文末の単語を取得して、そこから新しい続きを生成
+                    // ※ ここは既存の生成関数（generateTextなど）を再利用するか、
+                    // 文末の1語をキーにして脳から次の言葉を引っ張ってくる処理を書きます
+                    const lastWord = finalMessage.slice(-2); // 直近の2文字をヒントにする（簡易版）
+                    const nextAddition = generateAddition(lastWord, brain); 
+                    
+                    if (!nextAddition) break; // 続きが見つからなければ諦める
+                    
+                    finalMessage += nextAddition;
+                    retryCount++;
+                }
         // --- 5. 投稿実行 ---
         await sleep(12000);
         await mk.request('notes/create', { 
