@@ -499,7 +499,6 @@ ${config.characterSetting}
                         key.includes('\\u')||
                         key.includes(':')||
                         key.includes('@')||
-                        key.includes('\uFFFD')||
                         /[\uD800-\uDBFF]/.test(key) ||
                         /[\uDC00-\uDFFF]/.test(key) ||
                         key.includes('_')||
@@ -509,7 +508,7 @@ ${config.characterSetting}
                     if (Array.isArray(list)) {
                         brain[key] = list.filter(w => {
                             if (typeof w !== 'string') return false;
-                            if (w.includes('\\n') || w.includes('　') || w.includes('@')||w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)||test.includes('\uFFFD')) {
+                            if (w.includes('\\n') || w.includes('　') || w.includes('@')||w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)) {
                                 return false; 
                             }
                             return w.trim() !== "";
@@ -574,7 +573,6 @@ ${config.characterSetting}
                         next.includes(':')||
                         next.includes('_')||
                         next.includes('@')||
-                        next.includes('\uFFFD')||
                         /[\uD800-\uDBFF]/.test(next) ||
                         /[\uDC00-\uDFFF]/.test(next) ||
                         next.trim() === ""
