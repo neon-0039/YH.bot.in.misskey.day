@@ -695,7 +695,141 @@ function cleanBrain(brain) {
 // 📚 学習処理（安全版）
 // ================================
 function learnBrain(brain, words, tl_text) {
-console.log("停止中")
+    
+    const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
+
+    let learnCount = 0;
+
+    for (let i = 0; i < words.length - 1; i++) {
+
+        const current = words[i];
+        let next = words[i + 1];
+
+        if (
+            next.includes('\\n') ||
+            next.includes('　') ||
+            next.includes('<') ||
+            next.includes('\\') ||
+            next.includes('small') ||
+            next.includes('color') ||
+            next.includes('\\u') ||
+            next.includes(':') ||
+            next.includes('_') ||
+            next.includes('@') ||
+            /[\uD800-\uDBFF]/.test(next) ||
+            /[\uDC00-\uDFFF]/.test(next) ||
+            next.trim() === ""
+        ) {
+            continue;
+        }
+
+        // 半角カナ補正
+        if (/^[\uFF65-\uFF9F]+$/.test(next)) {
+            const fullBlock = kanaBlocks.find(b => b.startsWith(next));
+            if (fullBlock) next = fullBlock;
+        }
+
+        if (!brain[current]) {
+            brain[current] = [];
+        }
+
+        brain[current].push(next);
+
+        learnCount++;
+
+        if (brain[current].length > 20000) {
+            brain[current].shift();
+        }
+    }
+
+    console.log(`📚 学習完了: ${learnCount}単語追加`);
+    return brain;
+}
+
+// ================================
+// 💾 Drive保存（シンプル安定版）
+// ================================
+async function saveBrainToDrive(drive, brain) {
+    const fileId = process.env.GDRIVE_FILE_ID?.trim();
+
+    if (!fileId) {
+        console.error("GDRIVE_FILE_ID is empty.");
+        return false;
+    }
+
+    const payload = JSON.stringify(brain, null, 2);
+
+    console.log("DEBUG: saveBrainToDrive 開始");
+    console.log("DEBUG: 保存文字数:", payload.length);
+
+    // 1回目: googleapis で保存
+    try {
+        await drive.files.update({
+            fileId,
+            uploadType: 'media',
+            media: {
+                mimeType: 'application/json',
+                body: payload
+            },
+            fields: 'id'
+        });
+
+        console.log("Googleドライブの『脳』をアップデート完了");
+        return true;
+    } catch (e1) {
+        console.error("━━━━━━━━━━━━━ 🚨 Drive保存失敗(1回目) 🚨 ━━━━━━━━━━━━━");
+        console.error("Error Name:", e1.name);
+        console.error("Error Message:", e1.message);
+        if (e1.response) {
+            console.error("Status:", e1.response.status);
+            console.error(
+                "Data:",
+                typeof e1.response.data === 'string'
+                    ? e1.response.data.substring(0, 500)
+                    : JSON.stringify(e1.response.data).substring(0, 500)
+            );
+        }
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+        // 2回目: 直接RESTで保存
+        try {
+            const auth = await getDriveAuth();
+            const token = await auth.getAccessToken();
+
+            const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id`;
+
+            const res = await axios.patch(url, payload, {
+                headers: {
+                    Authorization: `Bearer ${token.token || token}`,
+                    'Content-Type': 'application/json; charset=utf-8'
+                },
+                validateStatus: () => true
+            });
+
+            if (res.status >= 200 && res.status < 300) {
+                console.log("Googleドライブの『脳』をRESTでアップデート完了");
+                return true;
+            }
+
+            console.error("━━━━━━━━━━━━━ 🚨 Drive保存失敗(2回目) 🚨 ━━━━━━━━━━━━━");
+            console.error("Status:", res.status);
+            console.error(
+                "Data:",
+                typeof res.data === 'string'
+                    ? res.data.substring(0, 500)
+                    : JSON.stringify(res.data).substring(0, 500)
+            );
+            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            return false;
+
+        } catch (e2) {
+            console.error("━━━━━━━━━━━━━ 🚨 Drive保存失敗(2回目例外) 🚨 ━━━━━━━━━━━━━");
+            console.error("Error Name:", e2.name);
+            console.error("Error Message:", e2.message);
+            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            return false;
+        }
+    }
 }
 // ================================
 // 🧠 マルコフ生成（進化版）
