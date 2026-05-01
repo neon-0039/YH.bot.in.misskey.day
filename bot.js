@@ -600,34 +600,55 @@ const auth = new google.auth.JWT(
                 const fileId = process.env.GDRIVE_FILE_ID;
 
                 // --- 既存の脳を読み込み ---
-                try {
-                    const res = await drive.files.get({
-                        fileId: fileId,
-                        alt: 'media'
-                    }, { 
-                        responseType: 'text',
-                        validateStatus: (status) => status < 500 
-                    });
+try {
+    const fileId = process.env.GDRIVE_FILE_ID?.trim(); // 空白除去
 
-                    let rawData = res.data;
+    if (!fileId) {
+        console.error("🚨 GDRIVE_FILE_ID が空です。Secretを確認してください。");
+        brain = {};
+    } else {
+        console.log(`DEBUG: Google Driveからファイル取得中 (ID: ${fileId.substring(0,5)}...)`);
+        
+        const res = await drive.files.get({
+            fileId: fileId,
+            alt: 'media'
+        }, { 
+            responseType: 'text',
+            // ここで400番台もエラーにせず受け取る
+            validateStatus: (status) => status < 500 
+        });
 
-                    if (typeof rawData === 'string' && rawData.trim().startsWith('<!')) {
-                        console.log("GoogleドライブからJSONではなくHTMLが返されました。");
-                        brain = {};
-                    } else {
-                        if (rawData) {
-                            brain = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
-                        } else {
-                            brain = {};
-                        }
-                        const wordCount = Object.keys(brain).length;
-                        console.log(`現在の脳の蓄積語数: ${wordCount}語`);
-                    }
-                } catch (readError) {
-                    console.log(`既存の脳の読み取り中にエラーが発生しました: ${readError.message}`);
-                    brain = {};
-                }
+        let rawData = res.data;
 
+        // HTMLが返ってきたら内容を詳しくログに出す
+        if (typeof rawData === 'string' && rawData.trim().startsWith('<!')) {
+            const titleMatch = rawData.match(/<title>(.*?)<\/title>/i);
+            console.error(`🚨 Apache/GoogleからHTMLが返されました: ${titleMatch ? titleMatch[1] : 'No Title'}`);
+            // なぜHTMLなのか？のヒントを出力
+            console.error("HTML冒頭:", rawData.substring(0, 200));
+            brain = {};
+        } else if (!rawData || rawData.trim() === "") {
+            console.log("脳のデータが空でした。新規作成します。");
+            brain = {};
+        } else {
+            // 文字列ならパース、オブジェクトならそのまま（念のため）
+            try {
+                brain = (typeof rawData === 'string') ? JSON.parse(rawData.trim()) : rawData;
+                const wordCount = Object.keys(brain).length;
+                console.log(`✅ 現在の脳の蓄積語数: ${wordCount}語`);
+            } catch (pErr) {
+                console.error("🚨 JSONパースエラー:", pErr.message);
+                console.error("受信データ冒頭:", String(rawData).substring(0, 100));
+                brain = {};
+            }
+        }
+    }
+} catch (readError) {
+    console.error(`❌ Google Drive接続致命的エラー: ${readError.message}`);
+    // Apache 400 の場合、ここで URL がどうなっていたか確認
+    if (readError.config) console.error("Request URL:", readError.config.url);
+    brain = {};
+}
                 // --- 既存の脳のクリーニング（一括大掃除） ---
                 console.log("既存の脳をスキャンしてゴミ（改行、タグ、絵文字、全角スペース）を掃除中...");
                 
