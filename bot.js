@@ -970,7 +970,6 @@ async function main() {
         console.error(`致命的なエラー: ${e.message}`);
     }
 }
-}
 
 // ================================
 // ▶ 実行
