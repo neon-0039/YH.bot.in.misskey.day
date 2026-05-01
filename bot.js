@@ -722,18 +722,32 @@ async function saveBrainToDrive(drive, brain) {
             throw new Error("GDRIVE_FILE_ID is empty.");
         }
 
-        await drive.files.update({
+        const res = await drive.files.update({
             fileId: fileId,
+            uploadType: 'media', // ← 超重要
             media: {
-            mimeType: 'application/json',
-            body: JSON.stringify(brain)
-            },
-        fields: 'id'
+                mimeType: 'application/json',
+                body: JSON.stringify(brain)
+            }
         });
-        console.log("Googleドライブの『脳』をアップデート完了");
+
+        console.log("✅ Drive保存成功:", res.status);
 
     } catch (e) {
-        console.error("Googleドライブ書き込みエラー:", e.message);
+
+        console.error("━━━━━━━━━━━━ 🚨 Drive保存失敗 🚨 ━━━━━━━━━━━━");
+
+        if (e.response) {
+            console.error("Status:", e.response.status);
+            console.error("Data:", JSON.stringify(e.response.data));
+        } else {
+            console.error("Error:", e.message);
+        }
+
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+        // ← ここ超重要：落とさず続行
+        return;
     }
 }
 // ================================
