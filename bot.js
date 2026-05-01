@@ -434,7 +434,7 @@ ${config.characterSetting}
                 await sleep(5000);
 
             } 
-        } 
+    }
     } catch (e) {
         console.log(`メンション処理エラー!><: ${e.message}`);
     } 
