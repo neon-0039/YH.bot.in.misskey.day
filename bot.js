@@ -748,21 +748,28 @@ ${config.characterSetting}
                         );
 
                         const res = await drive.files.get({
-                            //
                             fileId: fileId,
                             alt: 'media'
                         });
 
                         let rawData;
-                    
+
                         // objectならそのままJSON化
                         if (typeof res.data === 'object') {
                             rawData = JSON.stringify(res.data);
                         } else {
                             rawData = String(res.data);
                         }
+
                         console.log("FULL RESPONSE KEYS:", Object.keys(res));
-                        console.log("Request URL:", res.config?.url || res.request?.responseURL || "URL不明");
+
+                        console.log(
+                            "Request URL:",
+                            res.config?.url ||
+                            res.request?.responseURL ||
+                            "URL不明"
+                        );
+
                         if (
                             typeof rawData === 'string' &&
                             rawData.trim().startsWith('<!')
