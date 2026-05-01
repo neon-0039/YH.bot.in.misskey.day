@@ -713,7 +713,7 @@ async function saveBrainToDrive(drive, brain) {
     if (!fileId) return false;
 
     try {
-        const payload = JSON.stringify(brain);
+        const payload = JSON.stringify(brain, null, 2);
         const tokenResponse = await drive.auth.getAccessToken();
         const token = tokenResponse.token || tokenResponse;
 
