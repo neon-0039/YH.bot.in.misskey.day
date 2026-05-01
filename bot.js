@@ -87,9 +87,6 @@ async function getDriveClient() {
         credentials.private_key,
         ['https://www.googleapis.com/auth/drive']
     );
-
-    const drive = google.drive({ version: 'v3', auth });
-
     // 3. 【重要】ファイル取得テストとHTML検知
     try {
         const fileId = process.env.GDRIVE_FILE_ID;
@@ -750,19 +747,22 @@ ${config.characterSetting}
                             `DEBUG: Google Driveからファイル取得中 (ID: ${fileId.substring(0,5)}...)`
                         );
 
-                        const res = await drive.files.get(
-                            {
-                                fileId: fileId,
-                                alt: 'media'
-                            },
-                            {
-                                responseType: 'arraybuffer'
-                            }
-                        );
+                        const res = await drive.files.get({
+                            //
+                            fileId: fileId,
+                            alt: 'media'
+                        });
 
-                        let rawData =
-                            Buffer.from(res.data).toString('utf8');
-
+                        let rawData;
+                    
+                        // objectならそのままJSON化
+                        if (typeof res.data === 'object') {
+                            rawData = JSON.stringify(res.data);
+                        } else {
+                            rawData = String(res.data);
+                        }
+                        console.log("FULL RESPONSE KEYS:", Object.keys(res));
+                        console.log("Request URL:", res.config?.url || res.request?.responseURL || "URL不明");
                         if (
                             typeof rawData === 'string' &&
                             rawData.trim().startsWith('<!')
