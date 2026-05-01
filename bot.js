@@ -430,14 +430,14 @@ ${config.characterSetting}
                 console.log(`${note.user.username} さんに返信しました。`);
                 replyCount++;
 
+            // ===== 修正後 =====
                 console.log("API制限回避のため5秒待機します...");
             await sleep(5000);
 
         } // ← loop(for等)の終わり
-    } // ← if等の終わり
-} catch (e) {
-    console.log(`メンション処理エラー!><: ${e.message}`);
-} 
+    } catch (e) { // ← 余分な } を削り、外側の try と直接つなげました
+        console.log(`メンション処理エラー!><: ${e.message}`);
+    } 
 
     // --- ここから定期投稿処理 ---
     console.log("定期投稿の準備を開始します...");
@@ -724,7 +724,6 @@ ${config.characterSetting}
             visibility: 'home' 
         });
         console.log("本投稿が完了しました！内容: " + outputText);
-
     } catch (e) {
         console.error(`致命的なエラー: ${e.message}`);
         try {
