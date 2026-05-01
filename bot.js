@@ -66,51 +66,96 @@ async function getDriveClient() {
     const filePath = './credentials.json';
     let credentials;
 
-    // 1. ファイルの読み込みチェック
+    // 1. 認証JSON読み込み
     try {
+
         if (!existsSync(filePath)) {
-            const envData = process.env.GDRIVE_SERVICE_ACCOUNT;
-            if (!envData) throw new Error("Credentials file not found AND env GDRIVE_SERVICE_ACCOUNT is empty.");
+
+            const envData =
+                process.env.GDRIVE_SERVICE_ACCOUNT;
+
+            if (!envData) {
+
+                throw new Error(
+                    "Credentials file not found AND env is empty."
+                );
+            }
+
             credentials = JSON.parse(envData);
+
         } else {
-            credentials = JSON.parse(readFileSync(filePath, 'utf8'));
+
+            credentials = JSON.parse(
+                readFileSync(filePath, 'utf8')
+            );
         }
+
     } catch (err) {
-        console.error("❌ [AUTH ERROR] JSONの読み込みに失敗しました。Secretの形式を確認してください。");
+
+        console.error(
+            "❌ [AUTH ERROR] credentials.json 読み込み失敗"
+        );
+
         throw err;
     }
 
-    // 2. 認証オブジェクトの作成
+    // 2. JWT認証作成
     const auth = new google.auth.JWT(
         credentials.client_email,
         null,
         credentials.private_key,
         ['https://www.googleapis.com/auth/drive']
     );
-    // 3. 【重要】ファイル取得テストとHTML検知
+
+    // ★★★ これが抜けてた ★★★
+    const drive = google.drive({
+        version: 'v3',
+        auth
+    });
+
+    // 3. 接続テスト
     try {
-        const fileId = process.env.GDRIVE_FILE_ID;
-        if (!fileId) throw new Error("GDRIVE_FILE_ID is not defined in env.");
 
-        const response = await drive.files.get(
-            { fileId: fileId, alt: 'media' },
-            { responseType: 'stream' }
+        const fileId =
+            process.env.GDRIVE_FILE_ID?.trim();
+
+        if (!fileId) {
+
+            throw new Error(
+                "GDRIVE_FILE_ID is empty."
+            );
+        }
+
+        const response = await drive.files.get({
+            fileId: fileId,
+            alt: 'media'
+        });
+
+        console.log(
+            "✅ Data successfully retrieved from Google Drive."
         );
-
-        console.log("✅ Data successfully retrieved from Google Drive.");
 
         return drive;
 
     } catch (err) {
+
+        console.error(
+            "❌ Google Drive接続エラー:"
+        );
+
+        console.error(err.message);
+
         if (err.response) {
-            console.error(`❌ [API ERROR] Status: ${err.response.status}`);
-        } else {
-            console.error("❌ [SYSTEM ERROR]:", err.message);
+
+            console.error(
+                "Status:",
+                err.response.status
+            );
         }
+
         throw err;
     }
 }
-
 function generateAddition(startWord, brain) {
     let current = startWord;
     let addition = "";
