@@ -872,24 +872,57 @@ function generateMarkov(words, brain) {
 // 🚀 メイン処理
 // ================================
 async function main() {
-
+        async function main() {
     try {
+        console.log("=== API Connection Check ===");
 
-        // 修正箇所：515行目付近（standaloneMisskeyRequest 定義内）
-        
-        // ========================
-        // 🚀 実行確認
-        // ========================
+        // 1. まず変数を定義（ここを先頭に持ってくる）
+        const domain = (process.env.MK_DOMAIN || "").trim().replace(/^https?:\/\//, '').split('/')[0];
+        const token = (process.env.MK_TOKEN || "").trim();
+
         if (!domain || !token) {
-            throw new Error("MK_DOMAIN または MK_TOKEN が設定されていません。");
+            throw new Error("MK_DOMAIN または MK_TOKEN が環境変数に設定されていません。");
         }
 
+        // 2. その変数を使う関数を定義
+        const requestToMk = async (path, payload) => {
+            return new Promise((resolve, reject) => {
+                // ここで domain と token が確実に参照できる
+                const postData = JSON.stringify({ i: token, ...payload });
+                
+                const options = {
+                    hostname: domain, 
+                    port: 443,
+                    path: `/api/${path}`,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(postData),
+                        'Connection': 'close'
+                    }
+                };
+
+                const req = https.request(options, (res) => {
+                    let body = '';
+                    res.on('data', (chunk) => body += chunk);
+                    res.on('end', () => {
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
+                        } else {
+                            reject(new Error(`API Error ${res.statusCode}: ${body.substring(0, 100)}`));
+                        }
+                    });
+                });
+                req.on('error', (e) => reject(e));
+                req.write(postData);
+                req.end();
+            });
+        };
+
+        // 3. 実行
         const me = await mk.request('i');
-        const my_id = me.id;
-        const my_username = me.username;
-
-        console.log(`✅ Logged in as: @${my_username} (${my_id})`);
-
+        console.log(`✅ Logged in as: @${me.username}`);
+        // (以下、続きの処理)
         // ========================
         // 🤝 フォロバ・リムバ
         // ========================
