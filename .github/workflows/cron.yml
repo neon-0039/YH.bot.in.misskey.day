@@ -27,26 +27,25 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Run bot
-        run: |
-          # 1. Secretが空でないかチェック
-          if [ -z "$GDRIVE_SERVICE_ACCOUNT" ]; then 
-            echo "Error: GDRIVE_SERVICE_ACCOUNT is empty!"
-            exit 1
-          fi
-          
-          # 2. JSONファイルを作成 (cat << 'EOF' を使うのが最も安全)
-          cat << 'EOF' > credentials.json
-          ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
-          EOF
-          
-          # 3. 実行
-          node bot.js
         env:
-          # スクリプト側で "credentials.json" というファイル名を参照するようにする
-          GDRIVE_SERVICE_ACCOUNT_JSON_PATH: "./credentials.json"
+          GDRIVE_SERVICE_ACCOUNT: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
           GDRIVE_FILE_ID: ${{ secrets.GDRIVE_FILE_ID }}
           MK_DOMAIN: ${{ secrets.MK_DOMAIN }}
           MK_TOKEN: ${{ secrets.MK_TOKEN }}
           MK_TOKEN_ID: ${{ secrets.MK_TOKEN_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_SUB: ${{ secrets.GEMINI_API_KEY_SUB }}
+        run: |
+          # 1. Secretが空でないか改めて確認
+          if [ -z "$GDRIVE_SERVICE_ACCOUNT" ]; then 
+            echo "Error: GDRIVE_SERVICE_ACCOUNT is still empty!"
+            exit 1
+          fi
+          
+          # 2. JSONファイルを作成
+          cat << 'EOF' > credentials.json
+          ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
+          EOF
+          
+          # 3. 実行
+          node bot.js
