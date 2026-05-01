@@ -990,11 +990,8 @@ async function main() {
         // ========================
         // 🧠 脳ロード
         // ========================
-        let brain = await loadBrainFromDrive(drive);
+        brain = await loadBrainFromDrive(drive);
         // main関数内の loadBrainFromDrive 直後に挿入
-
-        // ...
-        let brain = await loadBrainFromDrive(drive);
         // Google ライブラリが汚染した可能性のあるエージェントを破棄して新調する
         http.globalAgent = new http.Agent();
         https.globalAgent = new https.Agent();
