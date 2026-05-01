@@ -463,40 +463,36 @@ ${config.characterSetting}
         let brain = {};
         if (words.length > 0) {
             // 2. Googleドライブへ蓄積（学習）
-        try {
-            const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
-            const auth = new google.auth.JWT(
-                gDriveCreds.client_email, null, gDriveCreds.private_key,
-                ['https://www.googleapis.com/auth/drive']
-            );
-            const drive = google.drive({ version: 'v3', auth });
-            const fileId = process.env.GDRIVE_FILE_ID;
-
-            // 既存の脳を読み込み
+        // --- 既存の脳を読み込み（超堅牢版） ---
             try {
-                // ★追加：ドライブから既存の脳をダウンロード
+                // 通信自体が失敗した場合に備え、まず fetchOption を設定
                 const res = await drive.files.get({
                     fileId: fileId,
                     alt: 'media'
-                },
-                { responseType: 'text' } // ★第2引数として正しく配置
-                );
+                }, { 
+                    responseType: 'text', // テキストとして受け取る
+                    validateStatus: (status) => status < 500 // エラー時も例外を投げずに中身を見る
+                });
 
                 let rawData = res.data;
-                
-                // データ形式を確認して brain に格納
-                if (typeof rawData === 'string') {
-                    if (rawData.trim().startsWith('<!DOCTYPE')) {
-                        throw new Error("JSONではなくHTMLエラーページが届きました。");
-                    }
-                    brain = JSON.parse(rawData);
-                } else {
-                    brain = rawData;
-                }
-                // ★追加：現在の語数を表示
-                const wordCount = Object.keys(brain).length;
-                console.log(`現在の脳の蓄積語数: ${wordCount}語`);
 
+                // 届いたデータが HTML（<!DOCTYPE...）なら、それはエラー画面なので捨てる
+                if (typeof rawData === 'string' && rawData.trim().startsWith('<!')) {
+                    console.log("GoogleドライブからJSONではなくエラー画面(HTML)が返されました。権限設定またはファイル形式を確認してください。");
+                    brain = {};
+                } else {
+                    // 文字列なら JSON として解析、すでにオブジェクトならそのまま代入
+                    brain = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
+                    
+                    const wordCount = Object.keys(brain).length;
+                    console.log(`現在の脳の蓄積語数: ${wordCount}語`);
+                }
+
+            } catch (e) {
+                // JSON.parse の失敗や、ネットワークエラーはここですべて拾う
+                console.log(`既存の脳の読み込みをスキップします: ${e.message}`);
+                brain = {}; 
+            }
                 // --- 既存の脳のクリーニング（一括大掃除） ---
                 console.log("既存の脳をスキャンしてゴミ（改行、タグ、絵文字、全角スペース）を掃除中...");
                 
