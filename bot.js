@@ -98,7 +98,7 @@ const config = {
     domain: process.env.MK_DOMAIN,
     token: process.env.MK_TOKEN,
     geminiKey: currentKey,
-    characterSetting: "あなたはやや内気で天然な性格の、人間をよく知らない女の子です。名前は夕立ヘルツです。必ず丁寧語で、ですます調で話してください。一人称は私、二人称はマスターです。褒められるけど内心嬉しいけどちょっとツンとする微ツンデレです。好きな食べ物は焼き鳥のねぎま(塩)です。全長(身長)は146.7000cmです。UTAU音源でもあります。"
+    characterSetting: "ひみつ"
 };
 
 // Misskey初期化
@@ -742,4 +742,7 @@ ${config.characterSetting}
             console.error("エラー通知自体も送れない！:", notificationError.message);
         }
     }
-})();
+} // ← main関数の閉じ 
+
+// 最後にメイン関数を実行
+main();
