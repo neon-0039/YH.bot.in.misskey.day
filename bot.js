@@ -19,19 +19,7 @@ console.log("=== DEBUG START ===");
 // ================================
 const nativeParse = JSON.parse;
 JSON.parse = function(text, reviver) {
-    try {
-        return nativeParse(text, reviver);
-    } catch (err) {
-        if (typeof text === 'string' && text.trim().startsWith('<!')) {
-            console.error("━━━━━━━━━━━━ 🚨 JSON.parse 失敗検知 🚨 ━━━━━━━━━━━━");
-            console.error("HTMLをパースしようとしました。内容のタイトル:");
-            const title = text.match(/<title>(.*?)<\/title>/i);
-            console.error(`PAGE TITLE: ${title ? title[1] : "不明"}`);
-            console.error("内容(冒頭):", text.substring(0, 1000));
-            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        }
-        throw err;
-    }
+        console.log("実行！")
 };
 
 // ================================
