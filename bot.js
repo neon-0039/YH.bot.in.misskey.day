@@ -35,18 +35,21 @@ const segmenter = new TinySegmenter();
  */
 async function getDriveClient() {
     const fs = require('fs');
-    
-    // YAMLで作ったファイルを読み込む
-    // もしファイルがない場合は、環境変数(Secret)から直接パースを試みる
-    let credentials;
-    if (fs.existsSync('./credentials.json')) {
-        credentials = JSON.parse(fs.readFileSync('./credentials.json', 'utf8'));
-    } else if (process.env.GDRIVE_SERVICE_ACCOUNT) {
-        credentials = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
-    } else {
-        throw new Error("認証情報（credentials.json または GDRIVE_SERVICE_ACCOUNT）が見つかりません");
+    const path = './credentials.json';
+
+    // 1. 認証ファイルの存在確認
+    if (!fs.existsSync(path)) {
+        throw new Error("❌ credentials.json が見つかりません。YAMLの設定を確認してください。");
     }
 
+    let credentials;
+    try {
+        credentials = JSON.parse(fs.readFileSync(path, 'utf8'));
+    } catch (e) {
+        throw new Error(`❌ credentials.json のパースに失敗しました: ${e.message}`);
+    }
+
+    // 2. 認証オブジェクトの作成
     const auth = new google.auth.JWT(
         credentials.client_email,
         null,
@@ -54,6 +57,50 @@ async function getDriveClient() {
         ['https://www.googleapis.com/auth/drive']
     );
 
+    const drive = google.drive({ version: 'v3', auth });
+
+    // --- ここから【中身取得＋デバッグ】機能 ---
+    
+    // オリジナルの機能を壊さないよう、中身を取得する関数をラップして提供するか、
+    // あるいはこの場で「ファイルが本当に読めるか」テストします。
+    try {
+        const fileId = process.env.GDRIVE_FILE_ID;
+        
+        // 実際にデータを取得しにいく
+        const res = await drive.files.get({
+            fileId: fileId,
+            alt: 'media'
+        }, { responseType: 'text' }); // あえてtextで受けて解析する
+
+        // もしHTMLが返ってきたら、詳細を解析してエラーを投げる
+        if (typeof res.data === 'string' && res.data.includes('<!DOCTYPE')) {
+            const titleMatch = res.data.match(/<title>(.*?)<\/title>/);
+            const title = titleMatch ? titleMatch[1] : "不明なエラーページ";
+            
+            console.error("━━━━━━━━━━━━ Google API ERROR ━━━━━━━━━━━━");
+            console.error(`Status: ${res.status}`);
+            console.error(`Title: ${title}`);
+            console.error(`Body: ${res.data.substring(0, 500)}...`); // 冒頭500文字を露出
+            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            
+            throw new Error(`GoogleからJSONではなくHTML(${title})が返されました。`);
+        }
+
+        // HTMLでなければJSONとしてパースして返す
+        // (本来のbot.jsの戻り値に合わせて、driveオブジェクトを返すように調整)
+        return drive;
+
+    } catch (err) {
+        // すでに上で投げたエラーはそのまま通す
+        if (err.message.includes('GoogleからJSONではなくHTML')) throw err;
+        
+        // それ以外のエラー（404, 403等）を詳細に出力
+        if (err.response && typeof err.response.data === 'string') {
+            console.error("❌ HTTP Response Data:", err.response.data.substring(0, 300));
+        }
+        throw err;
+    }
+}
     return google.drive({ version: 'v3', auth });
 }
 function generateAddition(startWord, brain) {
