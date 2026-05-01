@@ -299,14 +299,28 @@ async function askGemini(prompt) {
     // 全モデル失敗時の最終防衛ライン
     return getRandomError();
 }
-        
-async function main() {
+        async function main() {
     try {
-        const me = await mk.request('i');
+        console.log("=== API Connection Check ===");
+        
+        // 1. まずドメインとトークンが生きているか、一文字ずつ確認
+        const domain = (process.env.MK_DOMAIN || "").trim();
+        const token = (process.env.MK_TOKEN || "").trim();
+        
+        if (!domain || !token) {
+            throw new Error("MK_DOMAIN または MK_TOKEN が環境変数に設定されていません。");
+        }
+
+        // 2. 'i' へのリクエスト（自作 mk オブジェクトの挙動を確認）
+        // 修正ポイント: 第二引数に必ず空のオブジェクト {} を渡して、
+        // 内部で Body が undefined になるのを防ぐ
+        const me = await mk.request('i', { i: token }); 
+
         const my_id = me.id;
         const my_username = me.username;
-        console.log(`Logged in as: @${my_username}`);
+        console.log(`✅ Logged in as: @${my_username} (${my_id})`);
 
+        // ... 続く
         // --- 1. 自動フォロバ & 片想い解除処理 ---
         console.log("フォロー状況を整理中...");
         
