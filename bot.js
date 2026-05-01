@@ -1030,7 +1030,9 @@ async function main() {
         // 💾 保存
         // ========================
         console.log("DEBUG: learnBrain 完了、保存直前");
+        console.log("👉 これからGoogle Driveに保存します..."); // 👈 これを追加
         await saveBrainToDrive(drive, brain);
+        console.log("✅ Google Drive保存完了");
         axios.defaults.headers.common = {};
         console.log("DEBUG: saveBrainToDrive 後");
         // ========================
@@ -1079,7 +1081,8 @@ try {
     console.log("DEBUG: 絶縁リクエスト送信開始...");
 
     // fetchを使って、ライブラリの干渉を受けないように直接叩く
-    const response = await fetch(`https://${domain}/api/notes/create`, {
+        console.log("👉 これからMisskeyに投稿します..."); // 👈 これを追加
+        const response = await fetch(`https://${domain}/api/notes/create`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
