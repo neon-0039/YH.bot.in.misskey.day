@@ -728,13 +728,13 @@ async function saveBrainToDrive(drive, brain) {
         }
 
         await drive.files.update({
-            fileId,
+            fileId: fileId,
             media: {
-                mimeType: 'application/json',
-                body: JSON.stringify(brain, null, 2)
-            }
+            mimeType: 'application/json',
+            body: JSON.stringify(brain)
+            },
+        fields: 'id'
         });
-
         console.log("Googleドライブの『脳』をアップデート完了");
 
     } catch (e) {
