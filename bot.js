@@ -736,11 +736,10 @@ ${config.characterSetting}
         // 全体的なエラーハンドリング
         console.error(`致命的なエラー: ${e.message}`);
         try {
-            // エラー通知（もし通知ロジックがあればここに記述）
-            console.log("投稿エラー！><（エラー: ${e.message}）");
+            // エラー通知
+            console.log(`投稿エラー！><（エラー: ${e.message}）`);
         } catch (notificationError) {
             console.error("エラー通知自体も送れない！:", notificationError.message);
         }
     }
-} // ← async function 自体を閉じるカッコ（もし関数内なら必要）// 最後にしっかり実行
-main();
+})();
