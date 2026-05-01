@@ -560,6 +560,7 @@ ${config.characterSetting}
         const me = await mk.request('i');
         const my_id = me.id;
         console.log("マルコフ連鎖モード起動！");
+        const drive = await getDriveClient();
         console.log("=== MARKOV MODE DEBUG ===");
 console.log(`GDRIVE_FILE_ID: "${process.env.GDRIVE_FILE_ID}"`);
 // driveオブジェクトが正しく生成されているか
