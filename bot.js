@@ -741,35 +741,7 @@ ${config.characterSetting}
 
                         brain = {};
 
-                    } else {
-
-                        console.log(
-                            `DEBUG: Google Driveからファイル取得中 (ID: ${fileId.substring(0,5)}...)`
-                        );
-                        const drive = await getDriveClient();
-                        
-                        const res = await drive.files.get({
-                            fileId: fileId,
-                            alt: 'media'
-                        });
-
-                        let rawData;
-
-                        // objectならそのままJSON化
-                        if (typeof res.data === 'object') {
-                            rawData = JSON.stringify(res.data);
-                        } else {
-                            rawData = String(res.data);
-                        }
-
-                        console.log("FULL RESPONSE KEYS:", Object.keys(res));
-
-                        console.log(
-                            "Request URL:",
-                            res.config?.url ||
-                            res.request?.responseURL ||
-                            "URL不明"
-                        );
+                    } 
 
                         if (
                             typeof rawData === 'string' &&
@@ -803,12 +775,87 @@ ${config.characterSetting}
 
                             brain = {};
 
+                        }else {
+
+                        console.log(
+                            `DEBUG: Google Driveからファイル取得中 (ID: ${fileId.substring(0,5)}...)`
+                        );
+
+                        const drive = await getDriveClient();
+
+                        console.log("DRIVE DEBUG:", typeof drive);
+
+                        const res = await drive.files.get({
+                            fileId: fileId,
+                            alt: 'media'
+                        });
+
+                        let rawData;
+
+                        // objectならそのままJSON化
+                        if (typeof res.data === 'object') {
+
+                            rawData = JSON.stringify(res.data);
+
+                        } else {
+
+                            rawData = String(res.data);
+                        }
+
+                        console.log(
+                            "FULL RESPONSE KEYS:",
+                            Object.keys(res)
+                        );
+
+                        console.log(
+                            "Request URL:",
+                            res.config?.url ||
+                            res.request?.responseURL ||
+                            "URL不明"
+                        );
+
+                        if (
+                            typeof rawData === 'string' &&
+                            rawData.trim().startsWith('<!')
+                        ) {
+
+                            const titleMatch =
+                                rawData.match(/<title>(.*?)<\/title>/i);
+
+                            console.error(
+                                `🚨 Apache/GoogleからHTMLが返されました: ${
+                                    titleMatch
+                                        ? titleMatch[1]
+                                        : 'No Title'
+                                }`
+                            );
+
+                            console.error(
+                                "HTML冒頭:",
+                                rawData.substring(0, 200)
+                            );
+
+                            brain = {};
+
+                        } else if (
+                            !rawData ||
+                            rawData.trim() === ""
+                        ) {
+
+                            console.log(
+                                "脳のデータが空でした。新規作成します。"
+                            );
+
+                            brain = {};
+
                         } else {
 
                             try {
 
                                 brain =
-                                    JSON.parse(rawData.trim());
+                                    (typeof rawData === 'string')
+                                        ? JSON.parse(rawData.trim())
+                                        : rawData;
 
                                 const wordCount =
                                     Object.keys(brain).length;
@@ -833,7 +880,6 @@ ${config.characterSetting}
                             }
                         }
                     }
-
                 } catch (readError) {
 
                     console.error(
