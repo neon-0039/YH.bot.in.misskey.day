@@ -142,39 +142,22 @@ async function getDriveClient() {
 // ================================
 async function askGemini(prompt) {
 
-    const modelPriority =[
-    "gemini-3.1-flash-lite-preview",
-    "gemini-3.1-flash-preview",
-    "gemini-3.1-pro-preview",
-
-    "gemini-3-flash-preview",
-    "gemini-3-flash-lite-preview",
-    "gemini-3-pro-preview",
-    "gemini-3-flash-live",
-    "gemini-3-flash-live-8k",
-
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash-audio-dialog-preview",
-    "gemini-2.5-flash-native-audio-dialog-preview",
-
-    "gemini-2.0-flash-exp",
-    "gemini-2.0-pro-exp-02-05",
-    "gemini-2.0-flash-lite-preview-02-05",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-001",
-    "gemini-2.0-flash-lite",
-    "gemini-2.0-flash-lite-001",
-
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-flash-001",
-    "gemini-1.5-flash-002",
-    "gemini-1.5-pro",
-    "gemini-1.5-pro-001",
-    "gemini-1.5-pro-002"
-];
+    const modelPriority = [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3-flash-preview",
+        "gemini-3-flash-lite-preview",
+        "gemini-3-pro-preview",
+        "gemini-3-flash-live",
+        "gemini-3-flash-live-8k",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro"
+    ];
 
     const errorMessages = [
         "民主主義パンチ！！！！！！！！！！！ﾎﾞｺｫ(エラー)",
@@ -185,8 +168,7 @@ async function askGemini(prompt) {
         "親から将来の夢無くなりました(エラー)",
         "髪の毛の年越しARねぎま塩(エラー)",
         "枝豆あげるw(エラー)",
-        "もう帰りたい、眠い、学校なう！⊂(^ω^)⊃(エラー)"
-    ];
+        "もう帰りたい、眠い、学校なう！⊂(^ω^)⊃(エラー)"]
 
     const getRandomError = () =>
         errorMessages[Math.floor(Math.random() * errorMessages.length)];
@@ -202,28 +184,41 @@ async function askGemini(prompt) {
 
             const res = await axios.post(url, {
                 contents: [{ parts: [{ text: prompt }] }]
+            }, {
+                validateStatus: () => true // ←これ重要
             });
 
-            return res.data.candidates[0].content.parts[0].text;
-
-        } catch (error) {
-
-            const status = error.response ? error.response.status : null;
-
-            if (status === 429 || status === 404) {
-                console.warn(`⚠️ ${modelId} が利用不可です。次のモデルを試します...`);
+            // 💣 HTML検知
+            if (typeof res.data === 'string' && res.data.startsWith('<!')) {
+                console.warn(`⚠️ ${modelId} HTML返却 → スキップ`);
                 continue;
             }
 
-            const finalError = getRandomError();
-            console.error(`致命的なエラー！(${error.message}): ${finalError}`);
-            return finalError;
+            // 💣 ステータスチェック
+            if (res.status !== 200) {
+                console.warn(`⚠️ ${modelId} status ${res.status} → スキップ`);
+                continue;
+            }
+
+            const text =
+                res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!text) {
+                console.warn(`⚠️ ${modelId} テキスト空 → スキップ`);
+                continue;
+            }
+
+            return text;
+
+        } catch (error) {
+
+            console.warn(`⚠️ ${modelId} 例外: ${error.message}`);
+            continue;
         }
     }
 
     return getRandomError();
 }
-
 // ================================
 // 🤝 フォロバ & リムバ
 // ================================
