@@ -499,6 +499,7 @@ ${config.characterSetting}
                         key.includes('\\u')||
                         key.includes(':')||
                         key.includes('@')||
+                        key.includes('\uFFFD')||
                         /[\uD800-\uDBFF]/.test(key) ||
                         /[\uDC00-\uDFFF]/.test(key) ||
                         key.includes('_')||
@@ -508,7 +509,7 @@ ${config.characterSetting}
                     if (Array.isArray(list)) {
                         brain[key] = list.filter(w => {
                             if (typeof w !== 'string') return false;
-                            if (w.includes('\\n') || w.includes('　') || w.includes('@')||w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)) {
+                            if (w.includes('\\n') || w.includes('　') || w.includes('@')||w.includes('<') || w.includes('\\')||w.includes('small')||w.includes('color')||w.includes('\\u')||w.includes(':')||w.includes('_')||/[\uD800-\uDBFF]/.test(w)||/[\uDC00-\uDFFF]/.test(w)||test.includes('\uFFFD')) {
                                 return false; 
                             }
                             return w.trim() !== "";
@@ -542,7 +543,7 @@ ${config.characterSetting}
                         if (w.includes('\\u') || w.includes(':')) return "";
                         if (w.includes('_')||w.includes('@')) return "";
                         if(/[\uD800-\uDBFF]/.test(w) ||/[\uDC00-\uDFFF]/.test(w)) return "";         // サロゲートペアの下位（死骸2）)
-                        
+                        if (w.includes('\uFFFD')) return "";
                         // 3. 「:」に囲まれている文字列（カスタム絵文字 :emoji: など）を排除
                         // ※正規表現 /:.*:/ は「:」で始まり「:」で終わる文字列にマッチします
                         if (/:.*:/.test(w)) return "";
@@ -573,6 +574,7 @@ ${config.characterSetting}
                         next.includes(':')||
                         next.includes('_')||
                         next.includes('@')||
+                        next.includes('\uFFFD')||
                         /[\uD800-\uDBFF]/.test(next) ||
                         /[\uDC00-\uDFFF]/.test(next) ||
                         next.trim() === ""
@@ -682,6 +684,7 @@ ${config.characterSetting}
             .replace(/<.*?>/g, '')
             .replace(/\\u[0-9a-fA-F]{4}/g, '')
             .replace(/\\/g, '')
+            .replace('\uFFFD')
             .trim();
 
         // 3. 短くなりすぎたら継ぎ足し
