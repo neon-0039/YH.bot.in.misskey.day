@@ -434,11 +434,13 @@ ${config.characterSetting}
                 await sleep(5000);
 
             } 
-        } catch (e) {
-            console.log(`メンション処理エラー!><: ${e.message}`);
         } 
-        // ここにあった余計な } を消しました
-        console.log("定期投稿の準備を開始します...");
+    } catch (e) {
+        console.log(`メンション処理エラー!><: ${e.message}`);
+    } 
+
+    // --- ここから定期投稿処理 ---
+    console.log("定期投稿の準備を開始します...");
     try {
         console.log("本投稿の準備に入ります。2秒待機...");
         await sleep(2000);
@@ -536,12 +538,6 @@ ${config.characterSetting}
                     }
                 });
                 console.log("脳のクリーニング完了！");
-
-            } catch (globalError) {
-                console.log(`ドライブ連携全体でエラーが発生しました: ${globalError.message}`);
-                brain = {}; // 致命的な場合は空から開始
-            }
-        }
             // --- 改良版：半角カタカナの塊を抽出して学習 ---
             const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
 
@@ -626,11 +622,13 @@ ${config.characterSetting}
                     body: JSON.stringify(brain, null, 2) 
                 }
             });
+    
             console.log("Googleドライブの『脳』をアップデート完了（全単語学習・上限2万件モード）");
 
         } catch (driveError) {
             console.log("ドライブ連携に失敗（生成は続行）:", driveError.message);
         }
+    }
             // ↑ ここでドライブ処理の try-catch が完結！
         // --- この下に生成ロジック（const mm = ... や forループ）が続く ---
             // --- 3. マルコフ文章生成 ---
@@ -728,10 +726,8 @@ ${config.characterSetting}
         console.log("本投稿が完了しました！内容: " + outputText);
 
     } catch (e) {
-        // 全体的なエラーハンドリング
         console.error(`致命的なエラー: ${e.message}`);
         try {
-            // エラー通知
             console.log(`投稿エラー！><（エラー: ${e.message}）`);
         } catch (notificationError) {
             console.error("エラー通知自体も送れない！:", notificationError.message);
