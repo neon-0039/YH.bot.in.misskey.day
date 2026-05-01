@@ -464,35 +464,45 @@ ${config.characterSetting}
         if (words.length > 0) {
             // 2. Googleドライブへ蓄積（学習）
         // --- 既存の脳を読み込み（超堅牢版） ---
+            // 2. Googleドライブへ蓄積（学習）
             try {
-                // 通信自体が失敗した場合に備え、まず fetchOption を設定
-                const res = await drive.files.get({
-                    fileId: fileId,
-                    alt: 'media'
-                }, { 
-                    responseType: 'text', // テキストとして受け取る
-                    validateStatus: (status) => status < 500 // エラー時も例外を投げずに中身を見る
-                });
+                const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
+                const auth = new google.auth.JWT(
+                    gDriveCreds.client_email, null, gDriveCreds.private_key,
+                    ['https://www.googleapis.com/auth/drive']
+                );
+                const drive = google.drive({ version: 'v3', auth });
+                const fileId = process.env.GDRIVE_FILE_ID;
 
-                let rawData = res.data;
+                // --- 既存の脳を読み込み ---
+                try {
+                    const res = await drive.files.get({
+                        fileId: fileId,
+                        alt: 'media'
+                    }, { 
+                        responseType: 'text',
+                        validateStatus: (status) => status < 500 
+                    });
 
-                // 届いたデータが HTML（<!DOCTYPE...）なら、それはエラー画面なので捨てる
-                if (typeof rawData === 'string' && rawData.trim().startsWith('<!')) {
-                    console.log("GoogleドライブからJSONではなくエラー画面(HTML)が返されました。権限設定またはファイル形式を確認してください。");
+                    let rawData = res.data;
+
+                    if (typeof rawData === 'string' && rawData.trim().startsWith('<!')) {
+                        console.log("GoogleドライブからJSONではなくHTMLが返されました。");
+                        brain = {};
+                    } else {
+                        if (rawData) {
+                            brain = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
+                        } else {
+                            brain = {};
+                        }
+                        const wordCount = Object.keys(brain).length;
+                        console.log(`現在の脳の蓄積語数: ${wordCount}語`);
+                    }
+                } catch (readError) {
+                    console.log(`既存の脳の読み取り中にエラーが発生しました: ${readError.message}`);
                     brain = {};
-                } else {
-                    // 文字列なら JSON として解析、すでにオブジェクトならそのまま代入
-                    brain = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
-                    
-                    const wordCount = Object.keys(brain).length;
-                    console.log(`現在の脳の蓄積語数: ${wordCount}語`);
                 }
 
-            } catch (e) {
-                // JSON.parse の失敗や、ネットワークエラーはここですべて拾う
-                console.log(`既存の脳の読み込みをスキップします: ${e.message}`);
-                brain = {}; 
-            }
                 // --- 既存の脳のクリーニング（一括大掃除） ---
                 console.log("既存の脳をスキャンしてゴミ（改行、タグ、絵文字、全角スペース）を掃除中...");
                 
@@ -528,11 +538,11 @@ ${config.characterSetting}
                     }
                 });
                 console.log("脳のクリーニング完了！");
-            } catch (e) {
-                console.log("既存の脳がないため新規作成します");
-                brain = {}; // 読み込めなかった場合は空から開始
-            }
 
+            } catch (globalError) {
+                console.log(`ドライブ連携全体でエラーが発生しました: ${globalError.message}`);
+                brain = {}; // 致命的な場合は空から開始
+            }
             // --- 改良版：半角カタカナの塊を抽出して学習 ---
             const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
 
