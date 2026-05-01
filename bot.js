@@ -876,43 +876,7 @@ async function main() {
     try {
 
         // 修正箇所：515行目付近（standaloneMisskeyRequest 定義内）
-        // ========================
-        // 🔧 Misskeyリクエスト関数 (絶縁版)
-        // ========================
-        const standaloneMisskeyRequest = async (path, payload) => {
-            return new Promise((resolve, reject) => {
-                const cleanDomain = (domain || "").replace(/^https?:\/\//, '').replace(/\/$/, '');
-                const postData = JSON.stringify({ i: token, ...payload });
-                
-                const options = {
-                    hostname: cleanDomain,
-                    port: 443,
-                    path: `/api/${path}`,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(postData),
-                        'Connection': 'close'
-                    }
-                };
-
-                const req = https.request(options, (res) => {
-                    let body = '';
-                    res.on('data', (chunk) => body += chunk);
-                    res.on('end', () => {
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
-                            try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
-                        } else {
-                            reject(new Error(`API Error ${res.statusCode}: ${body.substring(0, 100)}`));
-                        }
-                    });
-                });
-                req.on('error', (e) => reject(e));
-                req.write(postData);
-                req.end();
-            });
-        }; // ★ここできちんと閉じます
-
+        
         // ========================
         // 🚀 実行確認
         // ========================
@@ -951,15 +915,34 @@ async function main() {
         brain = cleanBrain(brain);
 
         // Misskeyへのリクエストを完全に独立させるための関数（https直叩き）
-        const standaloneMisskeyRequest
+        // ========================
+        // 🔧 Misskeyリクエスト関数 (絶縁版)
+        // ========================
+        const standaloneMisskeyRequest = async (path, payload) => {
+            return new Promise((resolve, reject) => {
+                const cleanDomain = (domain || "").replace(/^https?:\/\//, '').replace(/\/$/, '');
+                const postData = JSON.stringify({ i: token, ...payload });
+                
+                const options = {
+                    hostname: cleanDomain,
+                    port: 443,
+                    path: `/api/${path}`,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(postData),
+                        'Connection': 'close'
+                    }
+                };
+
                 const req = https.request(options, (res) => {
                     let body = '';
                     res.on('data', (chunk) => body += chunk);
                     res.on('end', () => {
                         if (res.statusCode >= 200 && res.statusCode < 300) {
-                            resolve(JSON.parse(body));
+                            try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
                         } else {
-                            reject(new Error(`Apache Error ${res.statusCode}: ${body.substring(0, 100)}`));
+                            reject(new Error(`API Error ${res.statusCode}: ${body.substring(0, 100)}`));
                         }
                     });
                 });
@@ -967,7 +950,8 @@ async function main() {
                 req.write(postData);
                 req.end();
             });
-        };
+        }; // ★ここできちんと閉じます
+
 
         // 修正箇所：545行目付近
         // ========================
