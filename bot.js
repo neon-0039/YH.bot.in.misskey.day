@@ -702,41 +702,54 @@ async function saveBrainToDrive(drive, brain) {
     const fileId = process.env.GDRIVE_FILE_ID?.trim();
     if (!fileId) return false;
 
-    console.log("DEBUG: saveBrainToDrive 開始 (絶縁fetch版)");
+    console.log("DEBUG: saveBrainToDrive 開始 (純正https隔離版)");
 
     try {
-        const payload = JSON.stringify(brain);
+        const payload = JSON.stringify(brain); // 念のため整形なし
         
-        // 認証トークンだけ取得（ライブラリの通信機能は使わない）
+        // 認証トークンだけ取得
         const auth = await getDriveAuth();
         const tokenResponse = await auth.getAccessToken();
         const token = tokenResponse.token || tokenResponse;
 
-        // URLを直接指定
-        const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`;
+        return new Promise((resolve, reject) => {
+            const options = {
+                hostname: 'www.googleapis.com',
+                path: `/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`,
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(payload),
+                    'Connection': 'close' // 重要：使い回しを絶対させない
+                }
+            };
 
-        // axiosもgoogleapisも使わず、標準のfetchで「使い捨て」リクエストを送る
-        const res = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'Connection': 'close' // 通信が終わったらすぐ窓口を閉める
-            },
-            body: payload
+            const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => data += chunk);
+                res.on('end', () => {
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log("✅ Google Drive保存成功 (絶縁完了)");
+                        resolve(true);
+                    } else {
+                        console.error(`❌ Drive保存失敗: ${res.statusCode}`, data);
+                        resolve(false);
+                    }
+                });
+            });
+
+            req.on('error', (e) => {
+                console.error("❌ リクエストエラー:", e.message);
+                resolve(false);
+            });
+
+            req.write(payload);
+            req.end();
         });
 
-        if (res.ok) {
-            console.log("✅ Googleドライブの『脳』を絶縁fetchでアップデート完了");
-            return true;
-        } else {
-            const errorText = await res.text();
-            console.error(`❌ Drive保存失敗: ${res.status}`, errorText.substring(0, 200));
-            return false;
-        }
-
     } catch (e) {
-        console.error("❌ saveBrainToDriveで例外発生:", e.message);
+        console.error("❌ 例外発生:", e.message);
         return false;
     }
 }
