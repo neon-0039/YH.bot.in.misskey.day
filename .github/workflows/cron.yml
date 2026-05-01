@@ -29,6 +29,10 @@ jobs:
 
       - name: Run bot
         run: node bot.js
+        run: |
+          # 環境変数の中身を一時的なjsonファイルに書き出す
+          echo "$GDRIVE_SERVICE_ACCOUNT" > service_account.json
+          node bot.js
         env:
           GDRIVE_SERVICE_ACCOUNT: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
           GDRIVE_FILE_ID: ${{ secrets.GDRIVE_FILE_ID }}
