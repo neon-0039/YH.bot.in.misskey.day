@@ -727,25 +727,20 @@ ${config.characterSetting}
         // 最終的に掃除＆継ぎ足しが終わった「outputText 」を投稿する
         await sleep(1000);
         await mk.request('notes/create', { 
-            text: outputText .trim().slice(0, 110),
+            text: outputText.trim().slice(0, 110),
             visibility: 'home' 
         });
-        console.log("本投稿が完了しました！内容: " + outputText );
+        console.log("本投稿が完了しました！内容: " + outputText);
 
     } catch (e) {
         // 全体的なエラーハンドリング
         console.error(`致命的なエラー: ${e.message}`);
         try {
-            // エラー通知（文言はそのまま！）
-            await mk.request('notes/create', { 
-                text: `投稿エラー！><（エラー: ${e.message}）`,
-                visibility: 'home' 
-            });
-        } catch (postError) {
-            console.error("エラー通知にも失敗しました");
+            // エラー通知（もし通知ロジックがあればここに記述）
+            console.log("投稿エラー！><（エラー: ${e.message}）");
+        } catch (notificationError) {
+            console.error("エラー通知自体も送れない！:", notificationError.message);
         }
     }
-}
-
-// 最後にしっかり実行
+} // ← async function 自体を閉じるカッコ（もし関数内なら必要）// 最後にしっかり実行
 main();
