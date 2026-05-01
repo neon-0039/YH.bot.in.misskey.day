@@ -600,6 +600,8 @@ const auth = new google.auth.JWT(
                 const fileId = process.env.GDRIVE_FILE_ID;
 
                 // --- 既存の脳を読み込み ---
+                // Google Driveを叩く直前に入れる
+console.log(`DEBUG_TARGET_ID: "${process.env.GDRIVE_FILE_ID}"`);
 try {
     const fileId = process.env.GDRIVE_FILE_ID?.trim(); // 空白除去
 
