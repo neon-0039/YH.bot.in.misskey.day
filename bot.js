@@ -919,7 +919,7 @@ async function main() {
 
         await sleep(2000);
 
-        const drive = await getDriveClient();
+        const drive = await getDriveAuth();
 
         // ========================
         // 🧠 脳ロード
