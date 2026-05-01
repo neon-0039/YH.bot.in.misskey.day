@@ -433,13 +433,12 @@ ${config.characterSetting}
                 console.log("API制限回避のため5秒待機します...");
                 await sleep(5000);
 
-            } // ← ここが for (const note of mentions) の終わり
+            } 
         } catch (e) {
             console.log(`メンション処理エラー!><: ${e.message}`);
-        } // ← ここが メンション取得 try の終わり
-
+        } 
+        // ここにあった余計な } を消しました
         console.log("定期投稿の準備を開始します...");
-    
     try {
         console.log("本投稿の準備に入ります。2秒待機...");
         await sleep(2000);
@@ -462,7 +461,6 @@ ${config.characterSetting}
 
         let brain = {};
         if (words.length > 0) {
-            // 2. Googleドライブへ蓄積（学習）
         // --- 既存の脳を読み込み（超堅牢版） ---
             // 2. Googleドライブへ蓄積（学習）
             try {
@@ -634,8 +632,6 @@ ${config.characterSetting}
             console.log("ドライブ連携に失敗（生成は続行）:", driveError.message);
         }
             // ↑ ここでドライブ処理の try-catch が完結！
-
-        }
         // --- この下に生成ロジック（const mm = ... や forループ）が続く ---
             // --- 3. マルコフ文章生成 ---
         const markovDict = {};
@@ -741,7 +737,7 @@ ${config.characterSetting}
             console.error("エラー通知自体も送れない！:", notificationError.message);
         }
     }
-} // ← main関数を閉じる正しいカッコ
+}// ← main関数を閉じる正しいカッコ
 
 // 最後にしっかり実行
 main();
