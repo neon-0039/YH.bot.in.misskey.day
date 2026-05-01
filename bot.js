@@ -433,7 +433,7 @@ ${config.characterSetting}
                 console.log("API制限回避のため5秒待機します...");
                 await sleep(5000);
 
-            } 
+            }
     }
     } catch (e) {
         console.log(`メンション処理エラー!><: ${e.message}`);
