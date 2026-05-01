@@ -869,14 +869,13 @@ function generateMarkov(words, brain) {
 }
 
 // ================================
-// 🚀 メイン処理
+// 🚀 メイン処理 (完全統合版)
 // ================================
 async function main() {
-        async function main() {
     try {
         console.log("=== API Connection Check ===");
 
-        // 1. まず変数を定義（ここを先頭に持ってくる）
+        // 1. 環境変数の取得と徹底クリーンアップ
         const domain = (process.env.MK_DOMAIN || "").trim().replace(/^https?:\/\//, '').split('/')[0];
         const token = (process.env.MK_TOKEN || "").trim();
 
@@ -884,14 +883,12 @@ async function main() {
             throw new Error("MK_DOMAIN または MK_TOKEN が環境変数に設定されていません。");
         }
 
-        // 2. その変数を使う関数を定義
+        // 2. 外部ライブラリに依存しない絶縁版リクエスト関数
         const requestToMk = async (path, payload) => {
             return new Promise((resolve, reject) => {
-                // ここで domain と token が確実に参照できる
                 const postData = JSON.stringify({ i: token, ...payload });
-                
                 const options = {
-                    hostname: domain, 
+                    hostname: domain,
                     port: 443,
                     path: `/api/${path}`,
                     method: 'POST',
@@ -901,7 +898,6 @@ async function main() {
                         'Connection': 'close'
                     }
                 };
-
                 const req = https.request(options, (res) => {
                     let body = '';
                     res.on('data', (chunk) => body += chunk);
@@ -919,126 +915,85 @@ async function main() {
             });
         };
 
-        // 3. 実行
+        // 3. ログインユーザー情報の取得
         const me = await mk.request('i');
-        console.log(`✅ Logged in as: @${me.username}`);
-        // (以下、続きの処理)
-        // ========================
-        // 🤝 フォロバ・リムバ
-        // ========================
+        const my_id = me.id;
+        console.log(`✅ Logged in as: @${me.username} (${my_id})`);
+
+        // 4. 🤝 フォロバ・リムバ処理
         await handleFollowControl(my_id);
 
-        // ========================
-        // 💬 メンション処理
-        // ========================
+        // 5. 💬 メンション（返信）処理
         await handleMentions(me);
 
-        // ========================
-        // 📝 定期投稿開始
-        // ========================
+        // 6. 📝 定期投稿の準備
         console.log("定期投稿の準備を開始します...");
-
         await sleep(2000);
 
+        // Google Drive から脳データをロード
         const drive = await getDriveAuth();
         let brain = await loadBrainFromDrive(drive);
-        // ========================
-        // 🧠 脳ロード完了後
-        // ========================
+        
+        // 脳のクリーニング
         brain = cleanBrain(brain);
 
-        // Misskeyへのリクエストを完全に独立させるための関数（https直叩き）
-        // ========================
-        // 🔧 Misskeyリクエスト関数 (絶縁版)
-        // ========================
-        const standaloneMisskeyRequest = async (path, payload) => {
-            return new Promise((resolve, reject) => {
-                const cleanDomain = (domain || "").replace(/^https?:\/\//, '').replace(/\/$/, '');
-                const postData = JSON.stringify({ i: token, ...payload });
-                
-                const options = {
-                    hostname: cleanDomain,
-                    port: 443,
-                    path: `/api/${path}`,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(postData),
-                        'Connection': 'close'
-                    }
-                };
-
-                const req = https.request(options, (res) => {
-                    let body = '';
-                    res.on('data', (chunk) => body += chunk);
-                    res.on('end', () => {
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
-                            try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
-                        } else {
-                            reject(new Error(`API Error ${res.statusCode}: ${body.substring(0, 100)}`));
-                        }
-                    });
-                });
-                req.on('error', (e) => reject(e));
-                req.write(postData);
-                req.end();
-            });
-        }; // ★ここできちんと閉じます
-
-
-        // 修正箇所：545行目付近
-        // ========================
-        // 📥 タイムライン取得 (絶縁版)
-        // ========================
+        // 7. 📥 タイムライン取得 (絶縁版)
         console.log("👉 タイムラインを取得します...");
-        // ★修正：limit を 10 に下げ（安全圏）、確実に取得を試みる
-        const tlRaw = await standaloneMisskeyRequest('notes/hybrid-timeline', { limit: 10 });
+        const tlRaw = await requestToMk('notes/hybrid-timeline', { limit: 20 });
         
-        // ★修正：レスポンスが配列でない場合のガードを入れる
-        const tl = Array.isArray(tlRaw) ? tlRaw : [];
+        // 配列であることを保証
+        const tl = Array.isArray(tlRaw) ? tlRaw : (tlRaw?.notes || []);
 
         const tl_text = tl
             .filter(n => n && n.text && n.user.id !== my_id)
-        // ========================
-        // 📚 学習 & 保存
-        // ========================
+            .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
+            .join(" ");
+
+        // 形態素解析
+        const words = segmenter.segment(tl_text);
+        console.log(`【分析実行】総単語数: ${words.length}`);
+
+        // 8. 📚 学習 & Google Driveへ保存
         brain = learnBrain(brain, words, tl_text);
         await saveBrainToDrive(drive, brain);
-        console.log("✅ 脳の更新が完了しました");
+        console.log("✅ 脳の更新とDriveへの保存が完了しました");
 
-        // ========================
-        // 🧠 生成
-        // ========================
+        // 9. 🧠 マルコフ連鎖による文章生成
         let outputText = generateMarkov(words, brain);
-        // ... (短文補完などのロジックはそのまま) ...
 
-        // ========================
-        // 📤 投稿 (絶縁版)
-        // ========================
+        // 生成されたテキストが空、または短すぎる場合の補完
+        if (!outputText || outputText.length < 2) {
+            console.log("文章が短いためGeminiに補完を依頼します...");
+            outputText = await askGemini("適当な独り言を15文字以内で生成して。");
+        }
+
+        // 10. 📤 Misskeyへ最終投稿 (絶縁版)
         console.log("👉 Misskeyに最終投稿します...");
         try {
-            const resData = await standaloneMisskeyRequest('notes/create', {
+            const resData = await requestToMk('notes/create', {
                 text: outputText.trim().slice(0, 110),
                 visibility: 'home'
             });
-            console.log("✅ 絶縁投稿成功！ ID:", resData.createdNote.id);
+            console.log("✅ 投稿成功！ Note ID:", resData.createdNote?.id || "N/A");
         } catch (err) {
             console.error("━━━━━━━━━━━━━ 🚨 投稿失敗 🚨 ━━━━━━━━━━━━━");
             console.error(`原因: ${err.message}`);
         }
 
-        console.log("全工程が完了しました！内容: " + outputText);
-    }catch (e) {
+        console.log("全工程が正常に完了しました！内容: " + outputText);
 
-        console.error(`致命的なエラー: ${e.message}`);
-
+    } catch (e) {
+        console.error(`致命的なエラーが発生しました: ${e.message}`);
         try {
-            console.log(`投稿エラー！><（エラー: ${e.message}）`);
-        } catch {}
+            // エラーをコンソールに出すだけで投稿はしない（ループ防止）
+            console.log(`[System Log] 実行停止: ${e.message}`);
+        } catch (logErr) {}
     }
 }
 
 // ================================
-// ▶ 実行
+// ▶ 実行開始
 // ================================
-main();
+main().catch(err => {
+    console.error("Top-level Catch:", err);
+});
