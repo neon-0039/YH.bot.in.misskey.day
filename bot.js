@@ -441,8 +441,8 @@ ${config.characterSetting}
         console.log("定期投稿の準備を開始します...");
     
     try {
-        console.log("本投稿の準備に入ります。20秒待機...");
-        await sleep(20000);
+        console.log("本投稿の準備に入ります。2秒待機...");
+        await sleep(2000);
 
         const me = await mk.request('i');
         const my_id = me.id;
@@ -718,7 +718,7 @@ ${config.characterSetting}
         }
         // --- 5. 投稿実行 ---
         // 最終的に掃除＆継ぎ足しが終わった「outputText 」を投稿する
-        await sleep(12000);
+        await sleep(1000);
         await mk.request('notes/create', { 
             text: outputText .trim().slice(0, 110),
             visibility: 'home' 
