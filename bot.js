@@ -7,6 +7,11 @@ import axios from 'axios';
 import { google } from 'googleapis';
 import TinySegmenter from 'tiny-segmenter';
 
+//test
+        import http from 'http';
+        import https from 'https';
+
+
 console.log("=== DEBUG START ===");
 
 // ================================
@@ -987,8 +992,6 @@ async function main() {
         // ========================
         let brain = await loadBrainFromDrive(drive);
         // main関数内の loadBrainFromDrive 直後に挿入
-        import http from 'http';
-        import https from 'https';
 
         // ...
         let brain = await loadBrainFromDrive(drive);
