@@ -168,7 +168,93 @@ async function getDriveAuth() {
 // 🤖 Gemini問い合わせ（元コード維持）
 // ================================
 async function askGemini(prompt) {
-     return "Gemini停止中";
+     
+    const modelPriority = [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3-flash-preview",
+        "gemini-3-flash-lite-preview",
+        "gemini-3-pro-preview",
+        "gemini-3-flash-live",
+        "gemini-3-flash-live-8k",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro"
+    ];
+
+    const errorMessages = [
+        "民主主義パンチ！！！！！！！！！！！ﾎﾞｺｫ(エラー)",
+        "ザンギエフしゅおしゅおびーむ(エラー)",
+        "エラー！管理者何とかしろ！",
+        "肌荒れと自走砲が！！！！(エラー)",
+        "粉消しゴム美味しいよ(エラー)",
+        "親から将来の夢無くなりました(エラー)",
+        "髪の毛の年越しARねぎま塩(エラー)",
+        "枝豆あげるw(エラー)",
+        "もう帰りたい、眠い、学校なう！⊂(^ω^)⊃(エラー)"]
+
+    const getRandomError = () =>
+        errorMessages[Math.floor(Math.random() * errorMessages.length)];
+
+    for (const modelId of modelPriority) {
+
+        const url = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${currentKey}`;
+
+        try {
+
+            console.log(`モデル試行中: ${modelId}`);
+
+            const res = await axios.post(url, {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: prompt }]
+                    }
+                ]
+            }, {
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+
+            const text =
+                res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!text) {
+                console.warn("⚠️ レスポンスが空。次のモデルへ");
+                continue;
+            }
+
+            return text;
+
+        } catch (error) {
+
+            const status = error.response?.status;
+            const data = error.response?.data;
+
+            // 🔥 HTML検知（超重要）
+            if (typeof data === "string" && data.startsWith("<!")) {
+                console.warn("⚠️ HTMLレスポンス検知 → 次のモデルへ");
+                continue;
+            }
+
+            // 🔥 スキップ対象拡張
+            if ([400, 404, 429].includes(status)) {
+                console.warn(`⚠️ ${modelId} スキップ (${status})`);
+                continue;
+            }
+
+            console.error(`致命的エラー (${modelId}):`, error.message);
+            return getRandomError();
+        }
+    }
+
+    return getRandomError();
+
 }
 // ================================
 // 🤝 フォロバ & リムバ
