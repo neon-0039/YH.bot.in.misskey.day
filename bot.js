@@ -828,12 +828,36 @@ const auth = new google.auth.JWT(
         if (eventName === 'workflow_dispatch') {
             outputText = `【手動実行】${outputText}`;
         }
-        // --- 5. 投稿実行 ---
-        await sleep(1000);
-        await mk.request('notes/create', { 
-            text: outputText.trim().slice(0, 110),
-            visibility: 'home' 
-        });
+        // --- 5. 投稿実行 (デバッグ版) ---
+await sleep(1000);
+
+const postData = { 
+    i: process.env.MK_TOKEN, // トークンをここに入れる
+    text: outputText.trim().slice(0, 110),
+    visibility: 'home' 
+};
+
+console.log("--- 送信直前チェック ---");
+console.log("Domain:", process.env.MK_DOMAIN);
+console.log("Token ID (先頭4文字):", process.env.MK_TOKEN?.substring(0, 4));
+console.log("Payload:", JSON.stringify(postData));
+
+try {
+    // もし mk.request が自作関数なら、その中で 400 を吐いている
+    // 直接 axios や fetch で叩いてみるのが一番切り分けになります
+    await mk.request('notes/create', postData);
+    console.log("✅ 投稿成功！");
+} catch (err) {
+    console.error("❌ 投稿失敗...");
+    // 400エラーの内容を深掘り
+    if (err.response) {
+        console.error("Status:", err.response.status);
+        console.error("Data:", JSON.stringify(err.response.data));
+    } else {
+        console.error("Error Message:", err.message);
+    }
+    throw err;
+}
         console.log("本投稿が完了しました！内容: " + outputText);
     } catch (e) {
         console.error(`致命的なエラー: ${e.message}`);
