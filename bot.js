@@ -478,7 +478,21 @@ ${config.characterSetting}
                 const res = await drive.files.get({
                     fileId: fileId,
                     alt: 'media'
-                });
+                });, { responseType: 'text' }); // ★ここ！レスポンスをテキストとして受け取る
+
+                let rawData = res.data;
+                
+                // もしデータがオブジェクト（自動パース済み）ならそのまま、
+                // 文字列なら JSON.parse する
+                if (typeof rawData === 'string') {
+                    // HTMLが混じっていないか最終チェック
+                    if (rawData.trim().startsWith('<!DOCTYPE')) {
+                        throw new Error("JSONではなくHTMLが返ってきました。ファイルIDが正しいか再確認してください。");
+                    }
+                    brain = JSON.parse(rawData);
+                } else {
+                    brain = rawData;
+                }
                 brain = res.data;
                 
                 // ★追加：現在の語数を表示
