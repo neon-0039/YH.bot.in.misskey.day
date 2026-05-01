@@ -916,20 +916,7 @@ async function main() {
         brain = cleanBrain(brain);
 
         // Misskeyへのリクエストを完全に独立させるための関数（https直叩き）
-        const standaloneMisskeyRequest = async (path, payload) => {
-            return new Promise((resolve, reject) => {
-                const postData = JSON.stringify({ i: token, ...payload });
-                const options = {
-                    hostname: domain,
-                    port: 443,
-                    path: `/api/${path}`,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(postData),
-                        'Connection': 'close' // 通信が終わるたびに確実に切断する
-                    }
-                };
+        const standaloneMisskeyRequest
                 const req = https.request(options, (res) => {
                     let body = '';
                     res.on('data', (chunk) => body += chunk);
@@ -947,21 +934,19 @@ async function main() {
             });
         };
 
+        // 修正箇所：545行目付近
         // ========================
         // 📥 タイムライン取得 (絶縁版)
         // ========================
         console.log("👉 タイムラインを取得します...");
-        const tl = await standaloneMisskeyRequest('notes/hybrid-timeline', { limit: 128 });
+        // ★修正：limit を 10 に下げ（安全圏）、確実に取得を試みる
+        const tlRaw = await standaloneMisskeyRequest('notes/hybrid-timeline', { limit: 10 });
+        
+        // ★修正：レスポンスが配列でない場合のガードを入れる
+        const tl = Array.isArray(tlRaw) ? tlRaw : [];
 
         const tl_text = tl
-            .filter(n => n.text && n.user.id !== my_id)
-            .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
-            .slice(0, 64)
-            .join(" ");
-
-        const words = segmenter.segment(tl_text);
-        console.log(`【分析実行】総単語数: ${words.length}`);
-
+            .filter(n => n && n.text && n.user.id !== my_id)
         // ========================
         // 📚 学習 & 保存
         // ========================
