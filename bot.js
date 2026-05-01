@@ -957,7 +957,9 @@ async function main() {
         brain = learnBrain(brain, words, tl_text);
         await saveBrainToDrive(drive, brain);
         console.log("✅ 脳の更新とDriveへの保存が完了しました");
-
+        // ★追加：蓄積された総単語数をカウント
+        const totalWords = Object.keys(brain).length;
+        console.log(`✅ 脳の更新が完了しました（現在の総蓄積単語数: ${totalWords} 単語）`);
         // 9. 🧠 マルコフ連鎖による文章生成
         let outputText = generateMarkov(words, brain);
 
