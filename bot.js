@@ -543,6 +543,7 @@ ${config.characterSetting}
                 console.log(`ドライブ連携全体でエラーが発生しました: ${globalError.message}`);
                 brain = {}; // 致命的な場合は空から開始
             }
+        }
             // --- 改良版：半角カタカナの塊を抽出して学習 ---
             const kanaBlocks = tl_text.match(/[\uFF65-\uFF9F]+/g) || [];
 
