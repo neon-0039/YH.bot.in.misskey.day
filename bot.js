@@ -116,7 +116,8 @@ async function getDriveAuth() {
                 : rawToken?.token;
 
             const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-
+            console.log("TOKEN TYPE:", typeof token, token?.slice?.(0, 20));
+            console.log("FILE ID:", fileId);
             const res = await axios.get(url, {
                 headers: {
                     Authorization: `Bearer ${token}`
