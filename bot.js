@@ -990,6 +990,8 @@ async function main() {
         // 📤 投稿
         // ========================
         // 📤 投稿 (絶縁・生リクエスト版)
+http.globalAgent.destroy();
+https.globalAgent.destroy();
 await sleep(1000);
 
 try {
