@@ -830,10 +830,24 @@ ${config.characterSetting}
 
                         console.log("DRIVE DEBUG:", typeof drive);
 
-                        const res = await drive.files.get({
-                            fileId: fileId,
+                        const res = await drive.files.get(
+                        {
+                            fileId,
                             alt: 'media'
-                        });
+                        },
+                       {
+                            responseType: 'text'
+                        }
+                        );
+                        console.log(
+                            "RESPONSE DATA TYPE:",
+                            typeof res.data
+                        );
+
+                        console.log(
+                            "RESPONSE HEAD:",
+                            String(res.data).substring(0, 300)
+                        );
 
                         let rawData;
 
