@@ -116,6 +116,7 @@ async function getDriveAuth() {
     };
 
     return {
+            auth,
         files: {
             get: async ({ fileId, alt = 'media' }) => {
             const rawToken = await getToken();
@@ -694,7 +695,22 @@ function cleanBrain(brain) {
         }
     });
 
+// 修正箇所：360行目付近（cleanBrain と saveBrainToDrive の間）
     console.log("脳のクリーニング完了！");
+    return brain;
+}
+
+// ★ここに追加：足りなかった学習ロジック
+function learnBrain(brain, words) {
+    for (let i = 0; i < words.length - 1; i++) {
+        const w1 = words[i];
+        const w2 = words[i + 1];
+        if (particles.includes(w1)) {
+            if (!brain[w1]) brain[w1] = [];
+            if (!brain[w1].includes(w2)) brain[w1].push(w2);
+            if (brain[w1].length > 100) brain[w1].shift();
+        }
+    }
     return brain;
 }
 
@@ -705,15 +721,13 @@ async function saveBrainToDrive(drive, brain) {
     console.log("DEBUG: saveBrainToDrive 開始 (純正https隔離版)");
 
     try {
-        const payload = JSON.stringify(brain); // 念のため整形なし
+        const payload = JSON.stringify(brain);
         
-        // 認証トークンだけ取得
-        const auth = await getDriveAuth();
-        const tokenResponse = await auth.getAccessToken();
+        // ★修正：drive.auth からトークンを取得するように変更
+        const tokenResponse = await drive.auth.getAccessToken();
         const token = tokenResponse.token || tokenResponse;
 
-        return new Promise((resolve, reject) => {
-            const options = {
+        return new Promise((resolve, reject) => {            const options = {
                 hostname: 'www.googleapis.com',
                 path: `/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`,
                 method: 'PATCH',
@@ -904,7 +918,7 @@ async function main() {
         await sleep(2000);
 
         const drive = await getDriveAuth();
-
+        let brain = await loadBrainFromDrive(drive);
         // ========================
         // 🧠 脳ロード完了後
         // ========================
@@ -985,7 +999,8 @@ async function main() {
             console.error(`原因: ${err.message}`);
         }
 
-        console.log("全工程が完了しました！内容: " + outputText);{ catch (e) {
+        console.log("全工程が完了しました！内容: " + outputText);
+    }catch (e) {
 
         console.error(`致命的なエラー: ${e.message}`);
 
