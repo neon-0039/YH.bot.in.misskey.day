@@ -560,7 +560,27 @@ ${config.characterSetting}
         const me = await mk.request('i');
         const my_id = me.id;
         console.log("マルコフ連鎖モード起動！");
-        
+        console.log("=== MARKOV MODE DEBUG ===");
+console.log(`GDRIVE_FILE_ID: "${process.env.GDRIVE_FILE_ID}"`);
+// driveオブジェクトが正しく生成されているか
+console.log(`Drive object exists: ${typeof drive !== 'undefined'}`);
+
+try {
+    const fid = process.env.GDRIVE_FILE_ID;
+    if (!fid) throw new Error("環境変数 GDRIVE_FILE_ID が読み込めていません！");
+
+    // ここでエラーが出るはず
+    const res = await drive.files.get({
+        fileId: fid.trim(),
+        alt: 'media'
+    });
+} catch (e) {
+    console.error("❌ Drive取得失敗の直前ログ:");
+    console.error("Error Name:", e.name);
+    console.error("Error Message:", e.message);
+    if (e.config) console.error("実際に叩こうとしたURL:", e.config.url);
+    throw e;
+}
 // 1. タイムラインから材料を取得
         const tl = await mk.request('notes/hybrid-timeline', { limit: 128 });
         const tl_text = tl
