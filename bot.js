@@ -35,14 +35,17 @@ const segmenter = new TinySegmenter();
  */
 async function getDriveClient() {
     const fs = require('fs');
-    const path = './credentials.json';
-
-    if (!fs.existsSync(path)) {
-        throw new Error("credentials.json が見つかりません。YAMLの設定を確認してください。");
+    
+    // YAMLで作ったファイルを読み込む
+    // もしファイルがない場合は、環境変数(Secret)から直接パースを試みる
+    let credentials;
+    if (fs.existsSync('./credentials.json')) {
+        credentials = JSON.parse(fs.readFileSync('./credentials.json', 'utf8'));
+    } else if (process.env.GDRIVE_SERVICE_ACCOUNT) {
+        credentials = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
+    } else {
+        throw new Error("認証情報（credentials.json または GDRIVE_SERVICE_ACCOUNT）が見つかりません");
     }
-
-    // ファイルから直接JSONとして読み込む
-    const credentials = JSON.parse(fs.readFileSync(path, 'utf8'));
 
     const auth = new google.auth.JWT(
         credentials.client_email,
