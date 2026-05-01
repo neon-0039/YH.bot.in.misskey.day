@@ -1,3 +1,34 @@
+// bot.js の一番上に貼り付け
+import fs from 'fs'; // CommonJSなら const fs = require('fs');
+
+console.log("=== DEBUG START ===");
+
+// 1. まず環境変数の時点で壊れていないかチェック
+try {
+    const rawGdrive = process.env.GDRIVE_SERVICE_ACCOUNT;
+    if (rawGdrive && rawGdrive.trim().startsWith('<')) {
+        console.error("🚨 警告: 環境変数 GDRIVE_SERVICE_ACCOUNT の中身がすでに HTML です！");
+        console.error("冒頭部分:", rawGdrive.substring(0, 100));
+    }
+} catch (e) {}
+
+// 2. JSON.parse を監視し、犯人を特定する（グローバル・パッチ）
+const nativeParse = JSON.parse;
+JSON.parse = function(text, reviver) {
+    try {
+        return nativeParse(text, reviver);
+    } catch (err) {
+        if (typeof text === 'string' && text.trim().startsWith('<!')) {
+            console.error("━━━━━━━━━━━━ 🚨 JSON.parse 失敗検知 🚨 ━━━━━━━━━━━━");
+            console.error("HTMLをパースしようとしました。内容のタイトル:");
+            const title = text.match(/<title>(.*?)<\/title>/i);
+            console.error(`PAGE TITLE: ${title ? title[1] : "不明"}`);
+            console.error("内容(冒頭):", text.substring(0, 1000));
+            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        }
+        throw err;
+    }
+};
 import * as misskey from 'misskey-js'; // ここを * as に変更
 import axios from 'axios';
 import { GoogleGenerativeAI } from "@google/generative-ai";
