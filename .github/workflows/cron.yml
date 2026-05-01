@@ -26,21 +26,27 @@ jobs:
           npm install @google/generative-ai@0.21.0 misskey-js@latest axios
       - name: Install dependencies
         run: npm install
-
       - name: Run bot
-        run: node bot.js
         run: |
-          # 環境変数の中身を一時的なjsonファイルに書き出す
-          echo "$GDRIVE_SERVICE_ACCOUNT" > service_account.json
+          # 1. Secretが空でないかチェック
+          if [ -z "$GDRIVE_SERVICE_ACCOUNT" ]; then 
+            echo "Error: GDRIVE_SERVICE_ACCOUNT is empty!"
+            exit 1
+          fi
+          
+          # 2. JSONファイルを作成 (cat << 'EOF' を使うのが最も安全)
+          cat << 'EOF' > credentials.json
+          ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
+          EOF
+          
+          # 3. 実行
           node bot.js
         env:
-          GDRIVE_SERVICE_ACCOUNT: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
+          # スクリプト側で "credentials.json" というファイル名を参照するようにする
+          GDRIVE_SERVICE_ACCOUNT_JSON_PATH: "./credentials.json"
           GDRIVE_FILE_ID: ${{ secrets.GDRIVE_FILE_ID }}
-          # その他 Misskey のトークンなど
-          # 他の環境変数もここに追加
           MK_DOMAIN: ${{ secrets.MK_DOMAIN }}
           MK_TOKEN: ${{ secrets.MK_TOKEN }}
           MK_TOKEN_ID: ${{ secrets.MK_TOKEN_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_SUB: ${{ secrets.GEMINI_API_KEY_SUB }}
-          run: node bot.js
