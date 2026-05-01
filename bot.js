@@ -682,7 +682,8 @@ ${config.characterSetting}
             .replace(/<.*?>/g, '')
             .replace(/\\u[0-9a-fA-F]{4}/g, '')
             .replace(/\\/g, '')
-            .replace('\uFFFD')
+            .replace(/\\u[0-9a-fA-F]{4}/g, '')  // ★「\\uXXXX」形式を削除
+            .replace(/\\/g, '')                 // ★残った「\\」を単体で削除
             .trim();
 
         // 3. 短くなりすぎたら継ぎ足し
