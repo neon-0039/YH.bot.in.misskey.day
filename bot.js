@@ -34,18 +34,27 @@ const segmenter = new TinySegmenter();
  * Google Drive APIへの認証を行う関数
  */
 async function getDriveClient() {
-    // GitHub Secretsなどに保存した環境変数から読み込む
-    const credentials = {
-        client_email: process.env.GDRIVE_CLIENT_EMAIL,
-        // private_keyの改行コード（\n）を正しく処理する
-        private_key: process.env.GDRIVE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    };
+    const fs = require('fs');
+    let credentials;
 
+    // 1. YAMLで書き出したファイルがあるかチェック
+    if (fs.existsSync('./credentials.json')) {
+        const fileContent = fs.readFileSync('./credentials.json', 'utf8');
+        credentials = JSON.parse(fileContent);
+    } else {
+        // ローカル実行用（もし環境変数を個別に設定している場合）
+        credentials = {
+            client_email: process.env.GDRIVE_CLIENT_EMAIL,
+            private_key: process.env.GDRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        };
+    }
+
+    // 2. 認証オブジェクトの作成
     const auth = new google.auth.JWT(
         credentials.client_email,
         null,
         credentials.private_key,
-        ['https://www.googleapis.com/auth/drive'] // 操作権限のスコープ
+        ['https://www.googleapis.com/auth/drive']
     );
 
     return google.drive({ version: 'v3', auth });
@@ -466,11 +475,24 @@ ${config.characterSetting}
         // --- 既存の脳を読み込み（超堅牢版） ---
             // 2. Googleドライブへ蓄積（学習）
             try {
-                const gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
-                const auth = new google.auth.JWT(
-                    gDriveCreds.client_email, null, gDriveCreds.private_key,
-                    ['https://www.googleapis.com/auth/drive']
-                );
+const fs = require('fs'); // もし未定義なら追加
+
+// 環境変数に「中身」が入っている場合と「ファイルパス」がある場合の両方に対応させる書き方
+let gDriveCreds;
+if (process.env.GDRIVE_SERVICE_ACCOUNT_PATH) {
+    // YAMLで書き出したファイルを読み込む
+    gDriveCreds = JSON.parse(fs.readFileSync(process.env.GDRIVE_SERVICE_ACCOUNT_PATH, 'utf8'));
+} else {
+    // ローカル実行など、環境変数に直接入っている場合
+    gDriveCreds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT);
+}
+
+const auth = new google.auth.JWT(
+    gDriveCreds.client_email, 
+    null, 
+    gDriveCreds.private_key,
+    ['https://www.googleapis.com/auth/drive']
+);
                 const drive = google.drive({ version: 'v3', auth });
                 const fileId = process.env.GDRIVE_FILE_ID;
 
