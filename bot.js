@@ -693,15 +693,26 @@ function cleanBrain(brain) {
     return brain;
 }
 
-// ★ここに追加：足りなかった学習ロジック
 function learnBrain(brain, words) {
+    // words は形態素解析された単語の配列
     for (let i = 0; i < words.length - 1; i++) {
         const w1 = words[i];
         const w2 = words[i + 1];
-        if (particles.includes(w1)) {
-            if (!brain[w1]) brain[w1] = [];
-            if (!brain[w1].includes(w2)) brain[w1].push(w2);
-            if (brain[w1].length > 100) brain[w1].shift();
+
+        // 1. 脳に w1 が登録されていなければ配列を作成
+        if (!brain[w1]) {
+            brain[w1] = [];
+        }
+
+        // 2. ★修正ポイント：重複チェックを削除
+        // includes を外すことで、同じつながりが何度も push され、
+        // 生成時にその w2 が選ばれる確率（重み）が上がります。
+        brain[w1].push(w2);
+
+        // 3. 脳が肥大化しすぎないよう、最新の100件をキープ
+        // (ここが「最近の流行り」を反映するフィルターになります)
+        if (brain[w1].length > 10000) {
+            brain[w1].shift();
         }
     }
     return brain;
