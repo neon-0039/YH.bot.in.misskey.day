@@ -431,13 +431,13 @@ ${config.characterSetting}
                 replyCount++;
 
                 console.log("API制限回避のため5秒待機します...");
-                await sleep(5000);
+            await sleep(5000);
 
-            }
-    }
-    } catch (e) {
-        console.log(`メンション処理エラー!><: ${e.message}`);
-    } 
+        } // ← loop(for等)の終わり
+    } // ← if等の終わり
+} catch (e) {
+    console.log(`メンション処理エラー!><: ${e.message}`);
+} 
 
     // --- ここから定期投稿処理 ---
     console.log("定期投稿の準備を開始します...");
