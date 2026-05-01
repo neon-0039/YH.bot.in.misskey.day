@@ -35,21 +35,15 @@ const segmenter = new TinySegmenter();
  */
 async function getDriveClient() {
     const fs = require('fs');
-    let credentials;
+    const path = './credentials.json';
 
-    // 1. YAMLで書き出したファイルがあるかチェック
-    if (fs.existsSync('./credentials.json')) {
-        const fileContent = fs.readFileSync('./credentials.json', 'utf8');
-        credentials = JSON.parse(fileContent);
-    } else {
-        // ローカル実行用（もし環境変数を個別に設定している場合）
-        credentials = {
-            client_email: process.env.GDRIVE_CLIENT_EMAIL,
-            private_key: process.env.GDRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        };
+    if (!fs.existsSync(path)) {
+        throw new Error("credentials.json が見つかりません。YAMLの設定を確認してください。");
     }
 
-    // 2. 認証オブジェクトの作成
+    // ファイルから直接JSONとして読み込む
+    const credentials = JSON.parse(fs.readFileSync(path, 'utf8'));
+
     const auth = new google.auth.JWT(
         credentials.client_email,
         null,
