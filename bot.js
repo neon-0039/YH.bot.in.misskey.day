@@ -449,7 +449,7 @@ ${config.characterSetting}
         console.log("マルコフ連鎖モード起動！");
         
 // 1. タイムラインから材料を取得
-        const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
+        const tl = await mk.request('notes/hybrid-timeline', { limit: 128 });
         const tl_text = tl
             .filter(n => n.text && n.user.id !== my_id)
             .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
@@ -596,7 +596,7 @@ ${config.characterSetting}
                 // }
 
                 // 上限20,000件（各単語ごとのつながり上限）
-                if (brain[current].length > 100000) {
+                if (brain[current].length > 20000) {
                     brain[current].shift();
                 }
             }
