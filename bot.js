@@ -1,5 +1,5 @@
 // bot.js の一番上に貼り付け
-import fs from 'fs'; // CommonJSなら const fs = require('fs');
+import fs from 'fs';
 
 console.log("=== DEBUG START ===");
 
@@ -65,8 +65,8 @@ const segmenter = new TinySegmenter();
  * Google Drive APIへの認証を行う関数
  */
 async function getDriveClient() {
-    const fs = require('fs');
-    const { google } = require('googleapis'); // ライブラリのインポート確認
+    const fs = import('fs');
+    const { google } = import('googleapis'); // ライブラリのインポート確認
 
     const filePath = './credentials.json';
     let credentials;
@@ -599,7 +599,7 @@ try {
         // --- 既存の脳を読み込み（超堅牢版） ---
             // 2. Googleドライブへ蓄積（学習）
             try {
-const fs = require('fs'); // もし未定義なら追加
+const fs = import('fs'); // もし未定義なら追加
 
 // 環境変数に「中身」が入っている場合と「ファイルパス」がある場合の両方に対応させる書き方
 let gDriveCreds;
