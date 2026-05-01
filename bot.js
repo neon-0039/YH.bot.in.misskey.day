@@ -80,23 +80,18 @@ const mk = new misskey.api.APIClient({
 // ================================
 // ☁️ Google Driveクライアント（統一版）
 // ================================
-async function getDriveClient() {
+async function getDriveAuth() {
+    const envData = process.env.GDRIVE_SERVICE_ACCOUNT;
 
-    let credentials;
-
-    try {
-        const envData = process.env.GDRIVE_SERVICE_ACCOUNT;
-
-        if (!envData) {
-            throw new Error("Credentials env is empty.");
-        }
-
-        credentials = JSON.parse(envData);
-        console.log("PRIVATE_KEY CHECK:", credentials.private_key.slice(0, 50));
-    } catch (err) {
-        console.error("❌ [AUTH ERROR] credentials 読み込み失敗");
-        throw err;
+    if (!envData) {
+        throw new Error("Credentials env is empty.");
     }
+
+    const credentials = JSON.parse(envData);
+
+    console.log("PRIVATE_KEY CHECK:", credentials.private_key.slice(0, 50));
+
+    credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
 
     const auth = new google.auth.JWT(
         credentials.client_email,
@@ -105,37 +100,8 @@ async function getDriveClient() {
         ['https://www.googleapis.com/auth/drive']
     );
 
-    const drive = google.drive({
-        version: 'v3',
-        auth
-    });
-
-    try {
-        const fileId = process.env.GDRIVE_FILE_ID?.trim();
-
-        if (!fileId) {
-            throw new Error("GDRIVE_FILE_ID is empty.");
-        }
-
-        await drive.files.get({
-            fileId,
-            alt: 'media'
-        });
-
-        console.log("✅ Data successfully retrieved from Google Drive.");
-
-        return drive;
-
-    } catch (err) {
-        console.error("❌ Google Drive接続エラー:");
-        console.error(err.message);
-
-        if (err.response) {
-            console.error("Status:", err.response.status);
-        }
-
-        throw err;
-    }
+    await auth.authorize();
+    return auth;
 }
 // ================================
 // 🤖 Gemini問い合わせ（元コード維持）
@@ -722,41 +688,85 @@ function learnBrain(brain, words, tl_text) {
 // 💾 Drive保存（シンプル安定版）
 // ================================
 async function saveBrainToDrive(drive, brain) {
+    const fileId = process.env.GDRIVE_FILE_ID?.trim();
 
+    if (!fileId) {
+        console.error("GDRIVE_FILE_ID is empty.");
+        return false;
+    }
+
+    const payload = JSON.stringify(brain, null, 2);
+
+    console.log("DEBUG: saveBrainToDrive 開始");
+    console.log("DEBUG: 保存文字数:", payload.length);
+
+    // 1回目: googleapis で保存
     try {
-
-        const fileId = process.env.GDRIVE_FILE_ID?.trim();
-
-        if (!fileId) {
-            throw new Error("GDRIVE_FILE_ID is empty.");
-        }
-
-        const res = await drive.files.update({
-            fileId: fileId,
-            uploadType: 'media', // ← 超重要
+        await drive.files.update({
+            fileId,
+            uploadType: 'media',
             media: {
                 mimeType: 'application/json',
-                body: JSON.stringify(brain)
-            }
+                body: payload
+            },
+            fields: 'id'
         });
 
-        console.log("✅ Drive保存成功:", res.status);
-
-    } catch (e) {
-
-        console.error("━━━━━━━━━━━━ 🚨 Drive保存失敗 🚨 ━━━━━━━━━━━━");
-
-        if (e.response) {
-            console.error("Status:", e.response.status);
-            console.error("Data:", JSON.stringify(e.response.data));
-        } else {
-            console.error("Error:", e.message);
+        console.log("Googleドライブの『脳』をアップデート完了");
+        return true;
+    } catch (e1) {
+        console.error("━━━━━━━━━━━━━ 🚨 Drive保存失敗(1回目) 🚨 ━━━━━━━━━━━━━");
+        console.error("Error Name:", e1.name);
+        console.error("Error Message:", e1.message);
+        if (e1.response) {
+            console.error("Status:", e1.response.status);
+            console.error(
+                "Data:",
+                typeof e1.response.data === 'string'
+                    ? e1.response.data.substring(0, 500)
+                    : JSON.stringify(e1.response.data).substring(0, 500)
+            );
         }
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        // 2回目: 直接RESTで保存
+        try {
+            const auth = await getDriveAuth();
+            const token = await auth.getAccessToken();
 
-        // ← ここ超重要：落とさず続行
-        return;
+            const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id`;
+
+            const res = await axios.patch(url, payload, {
+                headers: {
+                    Authorization: `Bearer ${token.token || token}`,
+                    'Content-Type': 'application/json; charset=utf-8'
+                },
+                validateStatus: () => true
+            });
+
+            if (res.status >= 200 && res.status < 300) {
+                console.log("Googleドライブの『脳』をRESTでアップデート完了");
+                return true;
+            }
+
+            console.error("━━━━━━━━━━━━━ 🚨 Drive保存失敗(2回目) 🚨 ━━━━━━━━━━━━━");
+            console.error("Status:", res.status);
+            console.error(
+                "Data:",
+                typeof res.data === 'string'
+                    ? res.data.substring(0, 500)
+                    : JSON.stringify(res.data).substring(0, 500)
+            );
+            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            return false;
+
+        } catch (e2) {
+            console.error("━━━━━━━━━━━━━ 🚨 Drive保存失敗(2回目例外) 🚨 ━━━━━━━━━━━━━");
+            console.error("Error Name:", e2.name);
+            console.error("Error Message:", e2.message);
+            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            return false;
+        }
     }
 }
 // ================================
@@ -947,8 +957,9 @@ async function main() {
         // ========================
         // 💾 保存
         // ========================
+        console.log("DEBUG: learnBrain 完了、保存直前");
         await saveBrainToDrive(drive, brain);
-
+        console.log("DEBUG: saveBrainToDrive 後");
         // ========================
         // 🧠 生成
         // ========================
