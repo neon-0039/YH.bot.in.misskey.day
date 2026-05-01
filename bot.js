@@ -175,36 +175,30 @@ async function askGemini(prompt) {
 
     for (const modelId of modelPriority) {
 
-        const url =
-            `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${currentKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${currentKey}`;
 
         try {
 
             console.log(`モデル試行中: ${modelId}`);
 
             const res = await axios.post(url, {
-                contents: [{ parts: [{ text: prompt }] }]
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: prompt }]
+                    }
+                ]
             }, {
-                validateStatus: () => true // ←これ重要
+                headers: {
+                    "Content-Type": "application/json"
+                }
             });
-
-            // 💣 HTML検知
-            if (typeof res.data === 'string' && res.data.startsWith('<!')) {
-                console.warn(`⚠️ ${modelId} HTML返却 → スキップ`);
-                continue;
-            }
-
-            // 💣 ステータスチェック
-            if (res.status !== 200) {
-                console.warn(`⚠️ ${modelId} status ${res.status} → スキップ`);
-                continue;
-            }
 
             const text =
                 res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
             if (!text) {
-                console.warn(`⚠️ ${modelId} テキスト空 → スキップ`);
+                console.warn("⚠️ レスポンスが空。次のモデルへ");
                 continue;
             }
 
@@ -212,8 +206,23 @@ async function askGemini(prompt) {
 
         } catch (error) {
 
-            console.warn(`⚠️ ${modelId} 例外: ${error.message}`);
-            continue;
+            const status = error.response?.status;
+            const data = error.response?.data;
+
+            // 🔥 HTML検知（超重要）
+            if (typeof data === "string" && data.startsWith("<!")) {
+                console.warn("⚠️ HTMLレスポンス検知 → 次のモデルへ");
+                continue;
+            }
+
+            // 🔥 スキップ対象拡張
+            if ([400, 404, 429].includes(status)) {
+                console.warn(`⚠️ ${modelId} スキップ (${status})`);
+                continue;
+            }
+
+            console.error(`致命的エラー (${modelId}):`, error.message);
+            return getRandomError();
         }
     }
 
