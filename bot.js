@@ -1,6 +1,5 @@
 // bot.js の一番上に貼り付け
-import fs from 'fs';
-
+import { existsSync, readFileSync } from 'fs';
 console.log("=== DEBUG START ===");
 
 // 1. まず環境変数の時点で壊れていないかチェック
@@ -73,7 +72,7 @@ async function getDriveClient() {
 
     // 1. ファイルの読み込みチェック
     try {
-        if (!fs.existsSync(filePath)) {
+        if (!existsSync(filePath)) {
             const envData = process.env.GDRIVE_SERVICE_ACCOUNT;
             if (!envData) throw new Error("Credentials file not found AND env GDRIVE_SERVICE_ACCOUNT is empty.");
             credentials = JSON.parse(envData);
