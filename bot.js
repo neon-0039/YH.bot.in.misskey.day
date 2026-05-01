@@ -939,7 +939,7 @@ async function main() {
 
         // 7. 📥 タイムライン取得 (絶縁版)
         console.log("👉 タイムラインを取得します...");
-        const tlRaw = await requestToMk('notes/hybrid-timeline', { limit: 128 });
+        const tlRaw = await requestToMk('notes/hybrid-timeline', { limit: 72 });
         
         // 配列であることを保証
         const tl = Array.isArray(tlRaw) ? tlRaw : (tlRaw?.notes || []);
