@@ -724,7 +724,6 @@ ${config.characterSetting}
             outputText = `【手動実行】${outputText}`;
         }
         // --- 5. 投稿実行 ---
-        // 最終的に掃除＆継ぎ足しが終わった「outputText 」を投稿する
         await sleep(1000);
         await mk.request('notes/create', { 
             text: outputText.trim().slice(0, 110),
@@ -742,7 +741,7 @@ ${config.characterSetting}
             console.error("エラー通知自体も送れない！:", notificationError.message);
         }
     }
-} // ← main関数の閉じ 
+} // ← main関数を閉じる正しいカッコ
 
-// 最後にメイン関数を実行
+// 最後にしっかり実行
 main();
