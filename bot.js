@@ -944,30 +944,159 @@ function generateMarkov(words, brain) {
 // 🚀 メイン処理
 // ================================
 async function main() {
+
     try {
+
+        console.log("=== API Connection Check ===");
+
+        const domain = (process.env.MK_DOMAIN || "").trim();
+        const token = (process.env.MK_TOKEN || "").trim();
+
+        if (!domain || !token) {
+            throw new Error("MK_DOMAIN または MK_TOKEN が環境変数に設定されていません。");
+        }
+
         const me = await mk.request('i');
-        console.log(`✅ Logged in as: @${me.username}`);
 
-        // --- ここから下を全部スキップして投稿へ直行 ---
-        /*
+        const my_id = me.id;
+        const my_username = me.username;
+
+        console.log(`✅ Logged in as: @${my_username} (${my_id})`);
+
+        // ========================
+        // 🤝 フォロバ・リムバ
+        // ========================
         await handleFollowControl(my_id);
-        await handleMentions(me);
-        const drive = await getDriveAuth();
-        let brain = await loadBrainFromDrive(drive);
-        // ... 中略 ...
-        */
 
-        console.log("テスト：Google Driveを完全に無視して投稿します");
+        // ========================
+        // 💬 メンション処理
+        // ========================
+        await handleMentions(me);
+
+        // ========================
+        // 📝 定期投稿開始
+        // ========================
+        console.log("定期投稿の準備を開始します...");
+
+        await sleep(2000);
+
+        const drive = await getDriveAuth();
+
+        // ========================
+        // 🧠 脳ロード
+        // ========================
+        let brain = await loadBrainFromDrive(drive);
+
+        brain = cleanBrain(brain);
         
-        await mk.request('notes/create', {
-            text: "Google Drive処理をスキップしたテスト投稿です。",
-            visibility: 'home'
+        // ========================
+        // 📥 タイムライン取得
+        // ========================
+        const tl = await mk.request('notes/hybrid-timeline', {
+            limit: 128
         });
 
-        console.log("✅ 投稿成功");
+        const tl_text = tl
+            .filter(n => n.text && n.user.id !== my_id)
+            .map(n =>
+                n.text
+                    .replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '')
+                    .trim()
+            )
+            .slice(0, 64)
+            .join(" ");
+
+        const words = segmenter.segment(tl_text);
+
+        console.log(`【分析実行】総単語数: ${words.length}`);
+
+        // ========================
+        // 📚 学習
+        // ========================
+        brain = learnBrain(brain, words, tl_text);
+        axios.defaults.headers.common = {};
+        // ========================
+        // 💾 保存
+        // ========================
+        console.log("DEBUG: learnBrain 完了、保存直前");
+        await saveBrainToDrive(drive, brain);
+        axios.defaults.headers.common = {};
+        console.log("DEBUG: saveBrainToDrive 後");
+        // ========================
+        // 🧠 生成
+        // ========================
+        let outputText = generateMarkov(words, brain);
+
+        // ========================
+        // ✨ 短文補完（元仕様）
+        // ========================
+        const MIN_LENGTH = 10;
+        let retryCount = 0;
+
+        while (outputText.length < MIN_LENGTH && retryCount < 5) {
+
+            const hint =
+                outputText.length > 0
+                    ? outputText.slice(-2)
+                    : words[Math.floor(Math.random() * words.length)];
+
+            const addition =
+                brain[hint]?.[Math.floor(Math.random() * (brain[hint]?.length || 1))] || "";
+
+            if (!addition) break;
+
+            outputText += addition;
+            retryCount++;
+        }
+
+        // ========================
+        // 🛠 手動実行タグ
+        // ========================
+        const eventName = process.env.GITHUB_EVENT_NAME;
+
+        if (eventName === 'workflow_dispatch') {
+            outputText = `【手動実行】${outputText}`;
+        }
+
+        // ========================
+        // 📤 投稿
+        // ========================
+        await sleep(1000);
+
+        try {
+
+            console.log("DEBUG: 投稿リクエスト送信開始...");
+
+            await mk.request('notes/create', {
+                text: outputText.trim().slice(0, 110),
+                visibility: 'home'
+            });
+
+            console.log("✅ 投稿成功");
+
+        } catch (err) {
+
+            console.error("━━━━━━━━━━━━━ 🚨 Misskey投稿失敗 🚨 ━━━━━━━━━━━━━");
+
+            if (err.response) {
+                console.error(`Status: ${err.response.status}`);
+                console.error(`Data: ${JSON.stringify(err.response.data)}`);
+            } else {
+                console.error(`Error: ${err.message}`);
+            }
+
+            throw new Error("Apacheがリクエストを拒否しました。BodyかHeaderが不正です。");
+        }
+
+        console.log("本投稿が完了しました！内容: " + outputText);
 
     } catch (e) {
+
         console.error(`致命的なエラー: ${e.message}`);
+
+        try {
+            console.log(`投稿エラー！><（エラー: ${e.message}）`);
+        } catch {}
     }
 }
 
