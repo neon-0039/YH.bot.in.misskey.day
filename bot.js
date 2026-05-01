@@ -876,10 +876,12 @@ async function main() {
     try {
 
         // 修正箇所：515行目付近（standaloneMisskeyRequest 定義内）
+        // ========================
+        // 🔧 Misskeyリクエスト関数 (絶縁版)
+        // ========================
         const standaloneMisskeyRequest = async (path, payload) => {
             return new Promise((resolve, reject) => {
-                // ★修正：domain から https:// や末尾の / を完全に削る
-                const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                const cleanDomain = (domain || "").replace(/^https?:\/\//, '').replace(/\/$/, '');
                 const postData = JSON.stringify({ i: token, ...payload });
                 
                 const options = {
@@ -892,13 +894,33 @@ async function main() {
                         'Content-Length': Buffer.byteLength(postData),
                         'Connection': 'close'
                     }
-                }; 
-                    {
-            throw new Error("MK_DOMAIN または MK_TOKEN が環境変数に設定されていません。");
+                };
+
+                const req = https.request(options, (res) => {
+                    let body = '';
+                    res.on('data', (chunk) => body += chunk);
+                    res.on('end', () => {
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
+                        } else {
+                            reject(new Error(`API Error ${res.statusCode}: ${body.substring(0, 100)}`));
+                        }
+                    });
+                });
+                req.on('error', (e) => reject(e));
+                req.write(postData);
+                req.end();
+            });
+        }; // ★ここできちんと閉じます
+
+        // ========================
+        // 🚀 実行確認
+        // ========================
+        if (!domain || !token) {
+            throw new Error("MK_DOMAIN または MK_TOKEN が設定されていません。");
         }
 
         const me = await mk.request('i');
-
         const my_id = me.id;
         const my_username = me.username;
 
