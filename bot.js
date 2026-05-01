@@ -19,7 +19,22 @@ console.log("=== DEBUG START ===");
 // ================================
 const nativeParse = JSON.parse;
 JSON.parse = function(text, reviver) {
-        console.log("実行！")
+    // 1. まずは普通にパースを試みる
+    try {
+        const result = nativeParse(text, reviver);
+        
+        // 成功したときにログを出したいならここ
+        console.log("JSONパース成功！"); 
+        
+        return result; // パースした結果を必ず返す
+    } catch (err) {
+        // 2. 失敗した（HTMLが返ってきた等）ときの処理
+        if (typeof text === 'string' && text.trim().startsWith('<!')) {
+            console.error("🚨 HTMLを検知しました");
+            console.error("内容(冒頭):", text.substring(0, 500));
+        }
+        throw err; // エラーはそのまま外に投げる
+    }
 };
 
 // ================================
