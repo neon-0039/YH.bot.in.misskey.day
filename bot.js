@@ -101,7 +101,68 @@ async function getDriveAuth() {
     );
 
     await auth.authorize();
-    return auth;
+
+    const getToken = async () => {
+        const token = await auth.getAccessToken();
+        return token?.token || token;
+    };
+
+    return {
+        files: {
+            get: async ({ fileId, alt = 'media' }) => {
+                const token = await getToken();
+
+                const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`;
+
+                const res = await axios.get(url, {
+                    params: {
+                        alt,
+                        supportsAllDrives: true
+                    },
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    },
+                    responseType: 'text',
+                    validateStatus: () => true
+                });
+
+                if (res.status < 200 || res.status >= 300) {
+                    const err = new Error(`Drive GET failed: ${res.status}`);
+                    err.response = res;
+                    throw err;
+                }
+
+                return res;
+            },
+
+            update: async ({ fileId, media }) => {
+                const token = await getToken();
+
+                const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}`;
+
+                const res = await axios.patch(url, media.body, {
+                    params: {
+                        uploadType: 'media',
+                        supportsAllDrives: true
+                    },
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': media.mimeType || 'application/json; charset=utf-8'
+                    },
+                    responseType: 'text',
+                    validateStatus: () => true
+                });
+
+                if (res.status < 200 || res.status >= 300) {
+                    const err = new Error(`Drive UPDATE failed: ${res.status}`);
+                    err.response = res;
+                    throw err;
+                }
+
+                return res;
+            }
+        }
+    };
 }
 // ================================
 // 🤖 Gemini問い合わせ（元コード維持）
