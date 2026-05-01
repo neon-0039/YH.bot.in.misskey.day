@@ -1061,33 +1061,40 @@ async function main() {
         // ========================
         // 📤 投稿
         // ========================
-        await sleep(1000);
+        // 📤 投稿 (絶縁・生リクエスト版)
+await sleep(1000);
 
-        try {
+try {
+    console.log("DEBUG: 絶縁リクエスト送信開始...");
 
-            console.log("DEBUG: 投稿リクエスト送信開始...");
+    // fetchを使って、ライブラリの干渉を受けないように直接叩く
+    const response = await fetch(`https://${domain}/api/notes/create`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            i: token, // misskey-jsを使わず直接トークンを入れる
+            text: outputText.trim().slice(0, 110),
+            visibility: 'home'
+        })
+    });
 
-            await mk.request('notes/create', {
-                text: outputText.trim().slice(0, 110),
-                visibility: 'home'
-            });
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`サーバーが拒否しました: ${response.status}`);
+        console.error(`詳細内容: ${errorText}`);
+        throw new Error(`Apache 400: ${errorText.substring(0, 100)}`);
+    }
 
-            console.log("✅ 投稿成功");
+    const resData = await response.json();
+    console.log("✅ 絶縁投稿成功！ ID:", resData.createdNote.id);
 
-        } catch (err) {
-
-            console.error("━━━━━━━━━━━━━ 🚨 Misskey投稿失敗 🚨 ━━━━━━━━━━━━━");
-
-            if (err.response) {
-                console.error(`Status: ${err.response.status}`);
-                console.error(`Data: ${JSON.stringify(err.response.data)}`);
-            } else {
-                console.error(`Error: ${err.message}`);
-            }
-
-            throw new Error("Apacheがリクエストを拒否しました。BodyかHeaderが不正です。");
-        }
-
+} catch (err) {
+    console.error("━━━━━━━━━━━━━ 🚨 絶縁投稿失敗 🚨 ━━━━━━━━━━━━━");
+    console.error(`Error: ${err.message}`);
+    // ここでエラーが出たら、もう「文章の内容」そのものがApacheに嫌われています
+}
         console.log("本投稿が完了しました！内容: " + outputText);
 
     } catch (e) {
