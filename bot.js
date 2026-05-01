@@ -961,12 +961,25 @@ async function main() {
         // 9. 🧠 マルコフ連鎖による文章生成
         let outputText = generateMarkov(words, brain);
 
-        // 生成されたテキストが空、または短すぎる場合の補完
-        if (!outputText || outputText.length < 2) {
-            console.log("文章が短いためGeminiに補完を依頼します...");
-            outputText = await askGemini("適当な独り言を15文字以内で生成して。");
-        }
+        // ========================
+        // 🧠 生成（マルコフ再試行ロジック復元）
+        // ========================
+        let outputText = "";
+        let retryCount = 0;
 
+        // 納得のいく長さになるまで最大5回再生成
+        while ((!outputText || outputText.length < 4) && retryCount < 5) {
+            if (retryCount > 0) console.log(`再生成試行中... (${retryCount}回目)`);
+            outputText = generateMarkov(words, brain);
+            retryCount++;
+        }
+        // ★【手動実行タグの復元】
+        // 環境変数（GITHUB_ACTIONS等）や引数から手動実行かどうかを判定
+        const isManual = process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' || !process.env.GITHUB_ACTIONS;
+        if (isManual) {
+            outputText = `【手動実行】\n${outputText}`;
+            console.log("手動実行を検知したためタグを付与しました。");
+        }
         // 10. 📤 Misskeyへ最終投稿 (絶縁版)
         console.log("👉 Misskeyに最終投稿します...");
         try {
