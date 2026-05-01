@@ -144,20 +144,13 @@ async function getDriveAuth() {
 
             update: async ({ fileId, media }) => {
                 const token = await getToken();
-
-                const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}`;
+                const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`;
 
                 const res = await axios.patch(url, media.body, {
-                    params: {
-                        uploadType: 'media',
-                        supportsAllDrives: true
-                    },
                     headers: {
                         Authorization: `Bearer ${token}`,
-                        'Content-Type': media.mimeType || 'application/json; charset=utf-8'
-                    },
-                    responseType: 'text',
-                    validateStatus: () => true
+                        'Content-Type': 'application/json'
+                    }
                 });
 
                 if (res.status < 200 || res.status >= 300) {
@@ -714,20 +707,18 @@ function learnBrain(brain, words) {
     return brain;
 }
 
+// 修正箇所：390行目付近（saveBrainToDrive関数の冒頭）
 async function saveBrainToDrive(drive, brain) {
     const fileId = process.env.GDRIVE_FILE_ID?.trim();
     if (!fileId) return false;
 
-    console.log("DEBUG: saveBrainToDrive 開始 (純正https隔離版)");
-
     try {
         const payload = JSON.stringify(brain);
-        
-        // ★修正：drive.auth からトークンを取得するように変更
         const tokenResponse = await drive.auth.getAccessToken();
         const token = tokenResponse.token || tokenResponse;
 
-        return new Promise((resolve, reject) => {            const options = {
+        return new Promise((resolve, reject) => {            
+                const options = {
                 hostname: 'www.googleapis.com',
                 path: `/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`,
                 method: 'PATCH',
