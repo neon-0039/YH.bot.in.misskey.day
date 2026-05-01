@@ -875,12 +875,25 @@ async function main() {
 
     try {
 
-        console.log("=== API Connection Check ===");
-
-        const domain = (process.env.MK_DOMAIN || "").trim();
-        const token = (process.env.MK_TOKEN || "").trim();
-
-        if (!domain || !token) {
+        // 修正箇所：515行目付近（standaloneMisskeyRequest 定義内）
+        const standaloneMisskeyRequest = async (path, payload) => {
+            return new Promise((resolve, reject) => {
+                // ★修正：domain から https:// や末尾の / を完全に削る
+                const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                const postData = JSON.stringify({ i: token, ...payload });
+                
+                const options = {
+                    hostname: cleanDomain,
+                    port: 443,
+                    path: `/api/${path}`,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(postData),
+                        'Connection': 'close'
+                    }
+                }; 
+                    {
             throw new Error("MK_DOMAIN または MK_TOKEN が環境変数に設定されていません。");
         }
 
