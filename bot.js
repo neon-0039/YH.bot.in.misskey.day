@@ -92,7 +92,7 @@ async function getDriveClient() {
         }
 
         credentials = JSON.parse(envData);
-
+        console.log("PRIVATE_KEY CHECK:", credentials.private_key.slice(0, 50));
     } catch (err) {
         console.error("❌ [AUTH ERROR] credentials 読み込み失敗");
         throw err;
