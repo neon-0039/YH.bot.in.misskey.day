@@ -35,18 +35,23 @@ const segmenter = new TinySegmenter();
  */
 async function getDriveClient() {
     const fs = require('fs');
-    const path = './credentials.json';
+    const { google } = require('googleapis'); // ライブラリのインポート確認
 
-    // 1. 認証ファイルの存在確認
-    if (!fs.existsSync(path)) {
-        throw new Error("❌ credentials.json が見つかりません。YAMLの設定を確認してください。");
-    }
-
+    const filePath = './credentials.json';
     let credentials;
+
+    // 1. ファイルの読み込みチェック
     try {
-        credentials = JSON.parse(fs.readFileSync(path, 'utf8'));
-    } catch (e) {
-        throw new Error(`❌ credentials.json のパースに失敗しました: ${e.message}`);
+        if (!fs.existsSync(filePath)) {
+            const envData = process.env.GDRIVE_SERVICE_ACCOUNT;
+            if (!envData) throw new Error("Credentials file not found AND env GDRIVE_SERVICE_ACCOUNT is empty.");
+            credentials = JSON.parse(envData);
+        } else {
+            credentials = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        }
+    } catch (err) {
+        console.error("❌ [AUTH ERROR] JSONの読み込みに失敗しました。Secretの形式を確認してください。");
+        throw err;
     }
 
     // 2. 認証オブジェクトの作成
@@ -59,49 +64,58 @@ async function getDriveClient() {
 
     const drive = google.drive({ version: 'v3', auth });
 
-    // --- ここから【中身取得＋デバッグ】機能 ---
-    
-    // オリジナルの機能を壊さないよう、中身を取得する関数をラップして提供するか、
-    // あるいはこの場で「ファイルが本当に読めるか」テストします。
+    // 3. 【重要】ファイル取得テストとHTML検知
     try {
         const fileId = process.env.GDRIVE_FILE_ID;
-        
-        // 実際にデータを取得しにいく
-        const res = await drive.files.get({
-            fileId: fileId,
-            alt: 'media'
-        }, { responseType: 'text' }); // あえてtextで受けて解析する
+        if (!fileId) throw new Error("GDRIVE_FILE_ID is not defined in env.");
 
-        // もしHTMLが返ってきたら、詳細を解析してエラーを投げる
-        if (typeof res.data === 'string' && res.data.includes('<!DOCTYPE')) {
-            const titleMatch = res.data.match(/<title>(.*?)<\/title>/);
-            const title = titleMatch ? titleMatch[1] : "不明なエラーページ";
+        // alt: 'media' で取得を試みる（ここでHTMLが返ってくることが多い）
+        const response = await drive.files.get(
+            { fileId: fileId, alt: 'media' },
+            { responseType: 'text' } // 一旦テキストで受けて中身を検証
+        );
+
+        const rawData = response.data;
+
+        // HTML（<!DOCTYPE）が含まれているかチェック
+        if (typeof rawData === 'string' && rawData.toLowerCase().includes('<!doctype')) {
+            console.error("━━━━━━━━━━━━━ 🚨 HTML DETECTED 🚨 ━━━━━━━━━━━━━");
+            console.error(`Status: ${response.status} ${response.statusText}`);
             
-            console.error("━━━━━━━━━━━━ Google API ERROR ━━━━━━━━━━━━");
-            console.error(`Status: ${res.status}`);
-            console.error(`Title: ${title}`);
-            console.error(`Body: ${res.data.substring(0, 500)}...`); // 冒頭500文字を露出
-            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            // HTMLのタイトルを抽出
+            const titleMatch = rawData.match(/<title>(.*?)<\/title>/i);
+            console.error(`Page Title: ${titleMatch ? titleMatch[1] : "No Title"}`);
             
-            throw new Error(`GoogleからJSONではなくHTML(${title})が返されました。`);
+            // 中身の冒頭を出力（これで原因がわかります）
+            console.error("Content Snippet:");
+            console.error(rawData.substring(0, 1000)); 
+            console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            
+            throw new Error(`Google Drive API returned HTML instead of JSON. Check the logs above.`);
         }
 
-        // HTMLでなければJSONとしてパースして返す
-        // (本来のbot.jsの戻り値に合わせて、driveオブジェクトを返すように調整)
+        // HTMLでなければ、それが本来のJSONデータ
+        console.log("✅ Data successfully retrieved from Google Drive.");
+        
+        // 既存のbotコードがこのdriveオブジェクトを必要としているはずなので、
+        // 最後にdriveを返しますが、検証済みのデータをどこかに保存しておくと楽です
+        // 必要に応じて JSON.parse(rawData) して使ってください
+        
         return drive;
 
     } catch (err) {
-        // すでに上で投げたエラーはそのまま通す
-        if (err.message.includes('GoogleからJSONではなくHTML')) throw err;
-        
-        // それ以外のエラー（404, 403等）を詳細に出力
-        if (err.response && typeof err.response.data === 'string') {
-            console.error("❌ HTTP Response Data:", err.response.data.substring(0, 300));
+        if (err.response) {
+            console.error(`❌ [API ERROR] Status: ${err.response.status}`);
+            if (typeof err.response.data === 'string' && err.response.data.includes('<!doctype')) {
+                console.error("Response is HTML. Snippet:", err.response.data.substring(0, 500));
+            } else {
+                console.error("Response Data:", err.response.data);
+            }
+        } else {
+            console.error("❌ [SYSTEM ERROR]:", err.message);
         }
         throw err;
     }
-}
-    return google.drive({ version: 'v3', auth });
 }
 function generateAddition(startWord, brain) {
     let current = startWord;
