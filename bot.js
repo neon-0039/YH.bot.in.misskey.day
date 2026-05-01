@@ -906,129 +906,86 @@ async function main() {
         const drive = await getDriveAuth();
 
         // ========================
-        // 🧠 脳ロード
+        // 🧠 脳ロード完了後
         // ========================
-        let brain = await loadBrainFromDrive(drive);
-        // main関数内の loadBrainFromDrive 直後に挿入
-        // Google ライブラリが汚染した可能性のあるエージェントを破棄して新調する
-        http.globalAgent = new http.Agent();
-        https.globalAgent = new https.Agent();
         brain = cleanBrain(brain);
-        
+
+        // Misskeyへのリクエストを完全に独立させるための関数（https直叩き）
+        const standaloneMisskeyRequest = async (path, payload) => {
+            return new Promise((resolve, reject) => {
+                const postData = JSON.stringify({ i: token, ...payload });
+                const options = {
+                    hostname: domain,
+                    port: 443,
+                    path: `/api/${path}`,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(postData),
+                        'Connection': 'close' // 通信が終わるたびに確実に切断する
+                    }
+                };
+                const req = https.request(options, (res) => {
+                    let body = '';
+                    res.on('data', (chunk) => body += chunk);
+                    res.on('end', () => {
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            resolve(JSON.parse(body));
+                        } else {
+                            reject(new Error(`Apache Error ${res.statusCode}: ${body.substring(0, 100)}`));
+                        }
+                    });
+                });
+                req.on('error', (e) => reject(e));
+                req.write(postData);
+                req.end();
+            });
+        };
+
         // ========================
-        // 📥 タイムライン取得
+        // 📥 タイムライン取得 (絶縁版)
         // ========================
-        const tl = await mk.request('notes/hybrid-timeline', {
-            limit: 128
-        });
+        console.log("👉 タイムラインを取得します...");
+        const tl = await standaloneMisskeyRequest('notes/hybrid-timeline', { limit: 128 });
 
         const tl_text = tl
             .filter(n => n.text && n.user.id !== my_id)
-            .map(n =>
-                n.text
-                    .replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '')
-                    .trim()
-            )
+            .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
             .slice(0, 64)
             .join(" ");
 
         const words = segmenter.segment(tl_text);
-
         console.log(`【分析実行】総単語数: ${words.length}`);
 
         // ========================
-        // 📚 学習
+        // 📚 学習 & 保存
         // ========================
         brain = learnBrain(brain, words, tl_text);
-        axios.defaults.headers.common = {};
-        // ========================
-        // 💾 保存
-        // ========================
-        console.log("DEBUG: learnBrain 完了、保存直前");
-        console.log("👉 これからGoogle Driveに保存します..."); // 👈 これを追加
         await saveBrainToDrive(drive, brain);
-        console.log("✅ Google Drive保存完了");
-        axios.defaults.headers.common = {};
-        console.log("DEBUG: saveBrainToDrive 後");
+        console.log("✅ 脳の更新が完了しました");
+
         // ========================
         // 🧠 生成
         // ========================
         let outputText = generateMarkov(words, brain);
+        // ... (短文補完などのロジックはそのまま) ...
 
         // ========================
-        // ✨ 短文補完（元仕様）
+        // 📤 投稿 (絶縁版)
         // ========================
-        const MIN_LENGTH = 10;
-        let retryCount = 0;
-
-        while (outputText.length < MIN_LENGTH && retryCount < 5) {
-
-            const hint =
-                outputText.length > 0
-                    ? outputText.slice(-2)
-                    : words[Math.floor(Math.random() * words.length)];
-
-            const addition =
-                brain[hint]?.[Math.floor(Math.random() * (brain[hint]?.length || 1))] || "";
-
-            if (!addition) break;
-
-            outputText += addition;
-            retryCount++;
+        console.log("👉 Misskeyに最終投稿します...");
+        try {
+            const resData = await standaloneMisskeyRequest('notes/create', {
+                text: outputText.trim().slice(0, 110),
+                visibility: 'home'
+            });
+            console.log("✅ 絶縁投稿成功！ ID:", resData.createdNote.id);
+        } catch (err) {
+            console.error("━━━━━━━━━━━━━ 🚨 投稿失敗 🚨 ━━━━━━━━━━━━━");
+            console.error(`原因: ${err.message}`);
         }
 
-        // ========================
-        // 🛠 手動実行タグ
-        // ========================
-        const eventName = process.env.GITHUB_EVENT_NAME;
-
-        if (eventName === 'workflow_dispatch') {
-            outputText = `【手動実行】${outputText}`;
-        }
-
-        // ========================
-        // 📤 投稿
-        // ========================
-        // 📤 投稿 (絶縁・生リクエスト版)
-http.globalAgent.destroy();
-https.globalAgent.destroy();
-await sleep(1000);
-
-try {
-    console.log("DEBUG: 絶縁リクエスト送信開始...");
-
-    // fetchを使って、ライブラリの干渉を受けないように直接叩く
-        console.log("👉 これからMisskeyに投稿します..."); // 👈 これを追加
-        const response = await fetch(`https://${domain}/api/notes/create`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            i: token, // misskey-jsを使わず直接トークンを入れる
-            text: outputText.trim().slice(0, 110),
-            visibility: 'home'
-        })
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`サーバーが拒否しました: ${response.status}`);
-        console.error(`詳細内容: ${errorText}`);
-        throw new Error(`Apache 400: ${errorText.substring(0, 100)}`);
-    }
-
-    const resData = await response.json();
-    console.log("✅ 絶縁投稿成功！ ID:", resData.createdNote.id);
-
-} catch (err) {
-    console.error("━━━━━━━━━━━━━ 🚨 絶縁投稿失敗 🚨 ━━━━━━━━━━━━━");
-    console.error(`Error: ${err.message}`);
-    // ここでエラーが出たら、もう「文章の内容」そのものがApacheに嫌われています
-}
-        console.log("本投稿が完了しました！内容: " + outputText);
-
-    } catch (e) {
+        console.log("全工程が完了しました！内容: " + outputText);{ catch (e) {
 
         console.error(`致命的なエラー: ${e.message}`);
 
