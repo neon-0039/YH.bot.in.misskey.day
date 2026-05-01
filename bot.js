@@ -746,7 +746,8 @@ ${config.characterSetting}
                         console.log(
                             `DEBUG: Google Driveからファイル取得中 (ID: ${fileId.substring(0,5)}...)`
                         );
-
+                        const drive = await getDriveClient();
+                        
                         const res = await drive.files.get({
                             fileId: fileId,
                             alt: 'media'
