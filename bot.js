@@ -165,6 +165,42 @@ async function getDriveAuth() {
     };
 }
 // ================================
+// 🌡️ 佐渡島チェッカー
+// ================================
+async function getSadoMinTemp() {
+
+    try {
+
+        // 佐渡島中央付近
+        const lat = 38.0187;
+        const lon = 138.3683;
+
+        const url =
+            `https://api.open-meteo.com/v1/forecast` +
+            `?latitude=${lat}` +
+            `&longitude=${lon}` +
+            `&daily=temperature_2m_min` +
+            `&timezone=Asia%2FTokyo`;
+
+        const res = await axios.get(url);
+
+        const minTemp =
+            res.data?.daily?.temperature_2m_min?.[0];
+
+        if (minTemp === undefined) {
+            return "佐渡島の気温取得に失敗しました…。";
+        }
+
+        return `今日の佐渡島の最低気温は ${minTemp}℃ です！`;
+
+    } catch (e) {
+
+        console.error("佐渡島チェッカー失敗:", e.message);
+
+        return "佐渡島の最低気温、今ちょっと観測できませんでした…。";
+    }
+}
+// ================================
 // 🤖 Gemini問い合わせ（元コード維持）
 // ================================
 async function askGemini(prompt) {
@@ -468,7 +504,16 @@ async function handleMentions(me) {
             } else {
                 reply_text = "（タイムラインに材料がありません）";
             }
+        // ========================
+        // 🌡️ 佐渡島チェッカー
+        // ========================
+        else if (user_input.includes("佐渡島チェッカー")) {
 
+            console.log("佐渡島チェッカーモード起動！");
+
+            await sleep(2000);
+
+            reply_text = await getSadoMinTemp();
         // ========================
         // 🎴 おみくじ（そのまま）
         // ========================
