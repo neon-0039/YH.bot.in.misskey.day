@@ -834,52 +834,6 @@ async function saveBrainToDrive(drive, brain) {
  //
 async function generateWeatherReport(mode) {
     // 地点データ定義（地方ごとに配列を作成）
-    const locations = {
-        "北日本": [
-            { name: "択捉島", lat: 45.0, lon: 147.5 },
-            { name: "札幌", lat: 43.06, lon: 141.35 },
-            { name: "大間", lat: 41.53, lon: 140.91 },
-            { name: "青森", lat: 40.82, lon: 140.75 },
-            { name: "秋田", lat: 39.72, lon: 140.10 },
-            { name: "盛岡", lat: 39.70, lon: 141.15 },
-            { name: "平泉", lat: 38.98, lon: 141.11 },
-            { name: "仙台", lat: 38.27, lon: 140.87 },
-            { name: "三春", lat: 37.44, lon: 140.48 },
-            { name: "福島", lat: 37.76, lon: 140.47 }
-        ],
-        "東日本": [
-            { name: "水戸", lat: 36.37, lon: 140.45 },
-            { name: "宇都宮", lat: 36.57, lon: 139.88 },
-            { name: "大宮", lat: 35.91, lon: 139.63 },
-            { name: "千葉", lat: 35.61, lon: 140.12 },
-            { name: "東京", lat: 35.69, lon: 139.69 },
-            { name: "横浜", lat: 35.44, lon: 139.64 },
-            { name: "新潟", lat: 37.92, lon: 139.05 },
-            { name: "佐渡島", lat: 38.00, lon: 138.40 },
-            { name: "富山", lat: 36.70, lon: 137.21 },
-            { name: "長野", lat: 36.65, lon: 138.18 },
-            { name: "草津", lat: 36.62, lon: 138.60 },
-            { name: "山梨", lat: 35.66, lon: 138.57 },
-            { name: "静岡", lat: 34.98, lon: 138.38 }
-        ],
-        "中日本": [
-            { name: "木曽", lat: 35.84, lon: 137.69 },
-            { name: "岐阜", lat: 35.42, lon: 136.76 },
-            { name: "名古屋", lat: 35.18, lon: 136.91 },
-            { name: "津", lat: 34.72, lon: 136.51 }
-        ],
-        "西日本": [
-            { name: "大阪", lat: 34.69, lon: 135.50 },
-            { name: "和歌山", lat: 34.23, lon: 135.17 },
-            { name: "鳥取", lat: 35.50, lon: 134.24 },
-            { name: "島根", lat: 35.47, lon: 133.05 },
-            { name: "呉", lat: 34.25, lon: 132.57 },
-            { name: "山口", lat: 34.18, lon: 131.47 },
-            { name: "高松", lat: 34.34, lon: 134.04 },
-            { name: "松山", lat: 33.84, lon: 132.77 },
-            { name: "高知", lat: 33.56, lon: 133.53 }
-        ],
-        "九州・沖縄": [
 const locations = {
         "北海道": [
             { name: "稚内市", lat: 45.41, lon: 141.67 },
