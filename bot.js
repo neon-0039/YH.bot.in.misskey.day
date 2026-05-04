@@ -368,7 +368,7 @@ async function handleMentions(me) {
 
     for (const note of mentions) {
 
-        if (replyCount >= 4) break;
+        if (replyCount >= 6) break;
 
         let reply_text = "";
 
