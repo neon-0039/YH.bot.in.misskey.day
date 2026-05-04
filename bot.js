@@ -651,6 +651,9 @@ function cleanBrain(brain) {
             key.includes('\\u') ||
             key.includes(':') ||
             key.includes('@') ||
+            key.includes('[')||
+            key.includes(']')||
+            key.includes('$')||
             /[\uD800-\uDBFF]/.test(key) ||
             /[\uDC00-\uDFFF]/.test(key) ||
             key.includes('_') ||
@@ -675,6 +678,9 @@ function cleanBrain(brain) {
                     w.includes('\\u') ||
                     w.includes(':') ||
                     w.includes('_') ||
+                    w.includes('[')||
+                    w.includes(']')||
+                    w.includes('$')||
                     /[\uD800-\uDBFF]/.test(w) ||
                     /[\uDC00-\uDFFF]/.test(w)
                 ) return false;
