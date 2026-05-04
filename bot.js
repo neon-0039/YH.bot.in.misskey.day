@@ -829,6 +829,106 @@ async function saveBrainToDrive(drive, brain) {
         return false;
     }
 }
+//指定した地点リストの天気予報を取得し、整形された文字列を返す
+   //@param {string} mode - 'morning' (今日) か 'evening' (明日)
+ //
+async function generateWeatherReport(mode) {
+    // 地点データ定義（地方ごとに配列を作成）
+    const locations = {
+        "北日本": [
+            { name: "択捉島", lat: 45.0, lon: 147.5 },
+            { name: "札幌", lat: 43.06, lon: 141.35 },
+            { name: "大間", lat: 41.53, lon: 140.91 },
+            { name: "青森", lat: 40.82, lon: 140.75 },
+            { name: "秋田", lat: 39.72, lon: 140.10 },
+            { name: "盛岡", lat: 39.70, lon: 141.15 },
+            { name: "平泉", lat: 38.98, lon: 141.11 },
+            { name: "仙台", lat: 38.27, lon: 140.87 },
+            { name: "三春", lat: 37.44, lon: 140.48 },
+            { name: "福島", lat: 37.76, lon: 140.47 }
+        ],
+        "東日本": [
+            { name: "水戸", lat: 36.37, lon: 140.45 },
+            { name: "宇都宮", lat: 36.57, lon: 139.88 },
+            { name: "大宮", lat: 35.91, lon: 139.63 },
+            { name: "千葉", lat: 35.61, lon: 140.12 },
+            { name: "東京", lat: 35.69, lon: 139.69 },
+            { name: "横浜", lat: 35.44, lon: 139.64 },
+            { name: "新潟", lat: 37.92, lon: 139.05 },
+            { name: "佐渡島", lat: 38.00, lon: 138.40 },
+            { name: "富山", lat: 36.70, lon: 137.21 },
+            { name: "長野", lat: 36.65, lon: 138.18 },
+            { name: "草津", lat: 36.62, lon: 138.60 },
+            { name: "山梨", lat: 35.66, lon: 138.57 },
+            { name: "静岡", lat: 34.98, lon: 138.38 }
+        ],
+        "中日本": [
+            { name: "木曽", lat: 35.84, lon: 137.69 },
+            { name: "岐阜", lat: 35.42, lon: 136.76 },
+            { name: "名古屋", lat: 35.18, lon: 136.91 },
+            { name: "津", lat: 34.72, lon: 136.51 }
+        ],
+        "西日本": [
+            { name: "大阪", lat: 34.69, lon: 135.50 },
+            { name: "和歌山", lat: 34.23, lon: 135.17 },
+            { name: "鳥取", lat: 35.50, lon: 134.24 },
+            { name: "島根", lat: 35.47, lon: 133.05 },
+            { name: "呉", lat: 34.25, lon: 132.57 },
+            { name: "山口", lat: 34.18, lon: 131.47 },
+            { name: "高松", lat: 34.34, lon: 134.04 },
+            { name: "松山", lat: 33.84, lon: 132.77 },
+            { name: "高知", lat: 33.56, lon: 133.53 }
+        ],
+        "九州・沖縄": [
+            { name: "福岡", lat: 33.59, lon: 130.40 },
+            { name: "佐賀", lat: 33.26, lon: 130.30 },
+            { name: "佐世保", lat: 33.18, lon: 129.72 },
+            { name: "熊本", lat: 32.79, lon: 130.71 },
+            { name: "阿蘇", lat: 32.94, lon: 131.12 },
+            { name: "鹿児島", lat: 31.56, lon: 130.56 },
+            { name: "那覇", lat: 26.21, lon: 127.68 },
+            { name: "与那国島", lat: 24.47, lon: 123.01 },
+            { name: "南鳥島", lat: 24.28, lon: 153.98 }
+        ]
+    };
+
+    let report = mode === 'morning' ? "☀️ 本日の天気予報をお知らせします\n\n" : "🌙 明日の天気予報をお知らせします\n\n";
+    const dayOffset = mode === 'morning' ? 0 : 1; // 今日なら0, 明日なら1
+
+    // 地方ごとにループ
+    for (const region in locations) {
+        report += `【${region}】\n`;
+        
+        for (const loc of locations[region]) {
+            try {
+                // APIリクエスト（1地点ずつ取得）
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&daily=weathercode,temperature_2m_max,precipitation_probability_max&timezone=Asia%2FTokyo`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                const weatherCode = data.daily.weathercode[dayOffset];
+                const maxTemp = Math.round(data.daily.temperature_2m_max[dayOffset]);
+                const prob = data.daily.precipitation_probability_max[dayOffset];
+
+                // 天気コード変換（簡易版）
+                let emoji = "☁️";
+                if (weatherCode <= 1) emoji = "☀️";
+                else if (weatherCode <= 3) emoji = "⛅";
+                else if (weatherCode >= 51) emoji = "☔";
+
+                report += `${loc.name}: ${emoji} 最高${maxTemp}℃ 降水${prob}%\n`;
+                
+                // API負荷軽減のためわずかに待機（0.1秒）
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (e) {
+                report += `${loc.name}: データ取得エラー\n`;
+            }
+        }
+        report += "\n"; // 地方ごとに改行
+    }
+
+    return report;
+}
 // ================================
 // 🧠 マルコフ生成（進化版）
 // ================================
@@ -996,7 +1096,35 @@ async function main() {
 
         // 5. 💬 メンション（返信）処理
         await handleMentions(me);
+        // 1. 🕒 時間判定（日本時間）
+        const now = new Date(new Date().toLocaleString("ja-JP", {timeZone: "Asia/Tokyo"}));
+        const hour = now.getHours();
+        const min = now.getMinutes();
 
+        const isMorningWeather = (hour === 7 && min <= 20);
+        const isEveningWeather = (hour === 19 && min <= 20);
+
+        // 2. ☀️ 天気予報モードの実行
+        if (isMorningWeather || isEveningWeather) {
+            console.log("🌡 天気予報投稿モード始動...");
+            const mode = isMorningWeather ? 'morning' : 'evening';
+            const weatherContent = await generateWeatherReport(mode);
+
+            await requestToMk('notes/create', {
+                text: weatherContent,
+                cw: isMorningWeather ? "☀️ 本日の天気予報" : "🌙 明日の天気予報",
+                visibility: "public"
+            });
+            console.log("✅ 天気予報をパブリックで投稿しました。");
+
+            // 4秒待機
+            console.log("⏳ 4秒待機してマルコフ連鎖を開始します...");
+            await new Promise(resolve => setTimeout(resolve, 4000));
+        }
+
+        // 3. 🧠 通常の学習＆マルコフ連鎖フェーズ
+        console.log("📖 タイムラインを取得して学習を開始します...");
+            
         // 6. 📝 定期投稿の準備
         console.log("定期投稿の準備を開始します...");
         await sleep(2000);
