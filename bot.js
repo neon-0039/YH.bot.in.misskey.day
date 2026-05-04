@@ -391,27 +391,36 @@ async function handleMentions(me) {
 
         // --- リアクション ---
         if (
-            user_input.includes("おみくじ") ||
-            user_input.includes("マルコフ")
+    user_input.includes("おみくじ") ||
+    user_input.includes("マルコフ") ||
+    user_input.includes("佐渡島チェッカー") ||
+    user_input.includes("佐渡ヶ島チェッカー")
+) {
+
+    try {
+
+        let reactionEmoji = ":mk_hi:";
+
+        if (user_input.includes("おみくじ")) {
+            reactionEmoji = ":Shiropuyo_good:";
+        } else if (user_input.includes("マルコフ")) {
+            reactionEmoji = ":Shiropuyo_galaxy:";
+        } else if (
+            user_input.includes("佐渡島チェッカー") ||
+            user_input.includes("佐渡ヶ島チェッカー")
         ) {
-
-            try {
-
-                const reactionEmoji =
-                    user_input.includes("おみくじ")
-                        ? ":shiropuyo_good:"
-                        : ":Shiropuyo_galaxy:";
-
-                await mk.request('notes/reactions/create', {
-                    noteId: note.id,
-                    reaction: reactionEmoji
-                });
-
-            } catch (reacErr) {
-                console.error("リアクション失敗:", reacErr.message);
-            }
+            reactionEmoji = ":blobcatpnd_ryo:";
         }
 
+        await mk.request('notes/reactions/create', {
+            noteId: note.id,
+            reaction: reactionEmoji
+        });
+
+    } catch (reacErr) {
+        console.error("リアクション失敗:", reacErr.message);
+    }
+}
         // ========================
         // 🧠 マルコフ（旧仕様維持）
         // ========================
