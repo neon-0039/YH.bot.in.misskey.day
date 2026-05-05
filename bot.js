@@ -1145,8 +1145,8 @@ async function main() {
         const hour = now.getHours();
         const min = now.getMinutes();
 
-        const isMorningWeather = (hour === 7 && min <= 20);
-        const isEveningWeather = (hour === 19 && min <= 20);
+        const isMorningWeather = (hour === 7 && min <= 10);
+        const isEveningWeather = (hour === 19 && min <= 10);
 
         // 2. ☀️ 天気予報モードの実行
         if (isMorningWeather || isEveningWeather) {
