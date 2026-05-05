@@ -834,140 +834,186 @@ async function saveBrainToDrive(drive, brain) {
 async function generateWeatherReport(mode) {
     // 地点データ定義（地方ごとに配列を作成）
 const locations = {
-        "北海道": [
-            { name: "稚内市", lat: 45.41, lon: 141.67 },
-            { name: "知床(斜里町)", lat: 44.02, lon: 144.98 },
-            { name: "根室市", lat: 43.33, lon: 145.58 },
-            { name: "阿寒(釧路市)", lat: 43.43, lon: 144.09 },
-            { name: "ニセコ町", lat: 42.80, lon: 140.68 },
-            { name: "夕張市", lat: 43.05, lon: 141.97 },
-            { name: "日高町", lat: 42.48, lon: 142.07 },
-            { name: "札幌市", lat: 43.06, lon: 141.35 },
-            { name: "苫小牧市", lat: 42.63, lon: 141.60 },
-            { name: "函館市", lat: 41.76, lon: 140.72 }
-        ],
-        "北日本": [
-            { name: "択捉島", lat: 45.0, lon: 147.5 },
-            { name: "大間町", lat: 41.53, lon: 140.91 },
-            { name: "青森市", lat: 40.82, lon: 140.75 },
-            { name: "秋田市", lat: 39.72, lon: 140.10 },
-            { name: "盛岡市", lat: 39.70, lon: 141.15 },
-            { name: "平泉町", lat: 38.98, lon: 141.11 },
-            { name: "仙台市", lat: 38.27, lon: 140.87 },
-            { name: "三春町", lat: 37.44, lon: 140.48 },
-            { name: "福島市", lat: 37.76, lon: 140.47 }
-        ],
-        "関東地方": [
-            { name: "日光市", lat: 36.75, lon: 139.61 },
-            { name: "水戸市", lat: 36.37, lon: 140.45 },
-            { name: "前橋市", lat: 36.38, lon: 139.06 },
-            { name: "宇都宮市", lat: 36.57, lon: 139.88 },
-            { name: "霞ヶ浦(土浦市)", lat: 36.08, lon: 140.20 },
-            { name: "大宮(さいたま市)", lat: 35.91, lon: 139.63 },
-            { name: "成田市", lat: 35.78, lon: 140.31 },
-            { name: "千葉市", lat: 35.61, lon: 140.12 },
-            { name: "東京都", lat: 35.69, lon: 139.69 },
-            { name: "八王子市", lat: 35.66, lon: 139.33 },
-            { name: "横浜市", lat: 35.44, lon: 139.64 },
-            { name: "箱根町", lat: 35.23, lon: 139.10 },
-            { name: "館山市(房総半島)", lat: 34.99, lon: 139.86 }
-        ],
-        "中部・北陸": [
-            { name: "新潟市", lat: 37.92, lon: 139.05 },
-            { name: "佐渡島", lat: 38.00, lon: 138.40 },
-            { name: "上越市", lat: 37.14, lon: 138.24 },
-            { name: "越後湯沢", lat: 36.93, lon: 138.80 },
-            { name: "金沢市", lat: 36.56, lon: 136.65 },
-            { name: "輪島市", lat: 37.39, lon: 136.90 },
-            { name: "柏崎市", lat: 37.36, lon: 138.55 },
-            { name: "富山市", lat: 36.70, lon: 137.21 },
-            { name: "長野市", lat: 36.65, lon: 138.18 },
-            { name: "松本市", lat: 36.23, lon: 137.97 },
-            { name: "軽井沢町", lat: 36.34, lon: 138.63 },
-            { name: "草津町", lat: 36.62, lon: 138.60 },
-            { name: "福井市", lat: 36.06, lon: 136.22 },
-            { name: "山梨(甲府市)", lat: 35.66, lon: 138.57 },
-            { name: "富士市", lat: 35.16, lon: 138.67 },
-            { name: "静岡市", lat: 34.98, lon: 138.38 },
-            { name: "浜松市", lat: 34.71, lon: 137.72 },
-            { name: "下田市", lat: 34.67, lon: 138.94 },
-            { name: "木曽町", lat: 35.84, lon: 137.69 },
-            { name: "岐阜市", lat: 35.42, lon: 136.76 },
-            { name: "大垣市", lat: 35.36, lon: 136.61 },
-            { name: "名古屋市", lat: 35.18, lon: 136.91 },
-            { name: "津市", lat: 34.72, lon: 136.51 },
-            { name: "鳥羽市", lat: 34.48, lon: 136.84 },
-            { name: "長島(桑名市)", lat: 35.05, lon: 136.70 }
-        ],
-        "近畿・中国・四国": [
-            { name: "京都市", lat: 35.01, lon: 135.76 },
-            { name: "大津市", lat: 35.01, lon: 135.86 },
-            { name: "大阪市", lat: 34.69, lon: 135.50 },
-            { name: "神戸市", lat: 34.69, lon: 135.19 },
-            { name: "奈良市", lat: 34.68, lon: 135.83 },
-            { name: "和歌山市", lat: 34.23, lon: 135.17 },
-            { name: "淡路島(洲本市)", lat: 34.34, lon: 134.89 },
-            { name: "鳥取市", lat: 35.50, lon: 134.24 },
-            { name: "島根(松江市)", lat: 35.47, lon: 133.05 },
-            { name: "呉市", lat: 34.25, lon: 132.57 },
-            { name: "山口市", lat: 34.18, lon: 131.47 },
-            { name: "徳島市", lat: 34.07, lon: 134.55 },
-            { name: "高松市", lat: 34.34, lon: 134.04 },
-            { name: "松山市", lat: 33.84, lon: 132.77 },
-            { name: "高知市", lat: 33.56, lon: 133.53 }
-        ],
-        "九州・沖縄": [
-            { name: "福岡市", lat: 33.59, lon: 130.40 },
-            { name: "佐賀市", lat: 33.26, lon: 130.30 },
-            { name: "佐世保市", lat: 33.18, lon: 129.72 },
-            { name: "熊本市", lat: 32.79, lon: 130.71 },
-            { name: "阿蘇市", lat: 32.94, lon: 131.12 },
-            { name: "鹿児島市", lat: 31.56, lon: 130.56 },
-            { name: "出水市", lat: 32.08, lon: 130.35 },
-            { name: "奄美市", lat: 28.37, lon: 129.48 },
-            { name: "那覇市", lat: 26.21, lon: 127.68 },
-            { name: "与那国島", lat: 24.47, lon: 123.01 },
-            { name: "南鳥島", lat: 24.28, lon: 153.98 },
-            { name: "小笠原諸島", lat: 27.09, lon: 142.19 }
-        ],
-        "南極": [
-            { name: "昭和基地", lat: -69.00, lon: 39.58 }
-        ]
-    };
+    "北海道": [
+        { name: "稚内市", lat: 45.41, lon: 141.67 },
+        { name: "知床(斜里町)", lat: 44.02, lon: 144.98 },
+        { name: "根室市", lat: 43.33, lon: 145.58 },
+        { name: "阿寒(釧路市)", lat: 43.43, lon: 144.09 },
+        { name: "ニセコ町", lat: 42.80, lon: 140.68 },
+        { name: "夕張市", lat: 43.05, lon: 141.97 },
+        { name: "日高町", lat: 42.48, lon: 142.07 },
+        { name: "札幌市", lat: 43.06, lon: 141.35 },
+        { name: "苫小牧市", lat: 42.63, lon: 141.60 },
+        { name: "函館市", lat: 41.76, lon: 140.72 },
+        { name: "択捉島", lat: 45.0, lon: 147.5 },
+        { name: "国後島", lat: 44.0, lon: 145.8 }
+    ],
+    "樺太・千島列島": [
+        { name: "占守島", lat: 50.7, lon: 156.2 },
+        { name: "ユジノサハリンスク", lat: 46.95, lon: 142.73 }
+    ],
+    "東北": [
+        { name: "大間町", lat: 41.53, lon: 140.91 },
+        { name: "青森市", lat: 40.82, lon: 140.75 },
+        { name: "秋田市", lat: 39.72, lon: 140.10 },
+        { name: "盛岡市", lat: 39.70, lon: 141.15 },
+        { name: "平泉町", lat: 38.98, lon: 141.11 },
+        { name: "仙台市", lat: 38.27, lon: 140.87 },
+        { name: "三春町", lat: 37.44, lon: 140.48 },
+        { name: "山形市", lat: 38.25, lon: 140.33 },
+        { name: "郡山市", lat: 37.40, lon: 140.38 },
+        { name: "福島市", lat: 37.76, lon: 140.47 }
+    ],
+    "関東": [
+        { name: "日光市", lat: 36.75, lon: 139.61 },
+        { name: "日立市", lat: 36.60, lon: 140.65 },
+        { name: "水戸市", lat: 36.37, lon: 140.45 },
+        { name: "前橋市", lat: 36.38, lon: 139.06 },
+        { name: "宇都宮市", lat: 36.57, lon: 139.88 },
+        { name: "霞ヶ浦", lat: 36.08, lon: 140.20 },
+        { name: "大宮", lat: 35.91, lon: 139.63 },
+        { name: "成田市", lat: 35.78, lon: 140.31 },
+        { name: "千葉市", lat: 35.61, lon: 140.12 },
+        { name: "東京都", lat: 35.69, lon: 139.69 },
+        { name: "八王子市", lat: 35.66, lon: 139.33 },
+        { name: "横浜市", lat: 35.44, lon: 139.64 },
+        { name: "箱根町", lat: 35.23, lon: 139.10 },
+        { name: "館山市", lat: 34.99, lon: 139.86 }
+    ],
+    "甲信越": [
+        { name: "新潟市", lat: 37.92, lon: 139.05 },
+        { name: "佐渡島", lat: 38.00, lon: 138.40 },
+        { name: "上越市", lat: 37.14, lon: 138.24 },
+        { name: "越後湯沢", lat: 36.93, lon: 138.80 },
+        { name: "長野市", lat: 36.65, lon: 138.18 },
+        { name: "松本市", lat: 36.23, lon: 137.97 },
+        { name: "軽井沢町", lat: 36.34, lon: 138.63 },
+        { name: "草津町", lat: 36.62, lon: 138.60 },
+        { name: "甲府市", lat: 35.66, lon: 138.57 }
+    ],
+    "東海": [
+        { name: "富士市", lat: 35.16, lon: 138.67 },
+        { name: "静岡市", lat: 34.98, lon: 138.38 },
+        { name: "浜松市", lat: 34.71, lon: 137.72 },
+        { name: "下田市", lat: 34.67, lon: 138.94 },
+        { name: "岐阜市", lat: 35.42, lon: 136.76 },
+        { name: "大垣市", lat: 35.36, lon: 136.61 },
+        { name: "名古屋市", lat: 35.18, lon: 136.91 },
+        { name: "津市", lat: 34.72, lon: 136.51 },
+        { name: "鳥羽市", lat: 34.48, lon: 136.84 },
+        { name: "長島", lat: 35.05, lon: 136.70 }
+    ],
+    "北陸": [
+        { name: "富山市", lat: 36.70, lon: 137.21 },
+        { name: "金沢市", lat: 36.56, lon: 136.65 },
+        { name: "輪島市", lat: 37.39, lon: 136.90 },
+        { name: "柏崎市", lat: 37.36, lon: 138.55 },
+        { name: "福井市", lat: 36.06, lon: 136.22 },
+        { name: "小浜市", lat: 35.49, lon: 135.74 }
+    ],
+    "近畿": [
+        { name: "京都市", lat: 35.01, lon: 135.76 },
+        { name: "大津市", lat: 35.01, lon: 135.86 },
+        { name: "大阪市", lat: 34.69, lon: 135.50 },
+        { name: "神戸市", lat: 34.69, lon: 135.19 },
+        { name: "奈良市", lat: 34.68, lon: 135.83 },
+        { name: "和歌山市", lat: 34.23, lon: 135.17 },
+        { name: "淡路島", lat: 34.34, lon: 134.89 }
+    ],
+    "中国": [
+        { name: "鳥取市", lat: 35.50, lon: 134.24 },
+        { name: "松江市", lat: 35.47, lon: 133.05 },
+        { name: "隠岐(海士町)", lat: 36.10, lon: 133.10 },
+        { name: "岡山市", lat: 34.66, lon: 133.92 },
+        { name: "広島市", lat: 34.39, lon: 132.46 },
+        { name: "呉市", lat: 34.25, lon: 132.57 },
+        { name: "山口市", lat: 34.18, lon: 131.47 }
+    ],
+    "四国": [
+        { name: "松山市", lat: 33.84, lon: 132.77 },
+        { name: "高松市", lat: 34.34, lon: 134.04 },
+        { name: "高知市", lat: 33.56, lon: 133.53 },
+        { name: "徳島市", lat: 34.07, lon: 134.55 },
+        { name: "今治市", lat: 34.07, lon: 133.00 },
+        { name: "新居浜市", lat: 33.96, lon: 133.28 },
+        { name: "丸亀市", lat: 34.29, lon: 133.79 }
+    ],
+    "九州": [
+        { name: "福岡市", lat: 33.59, lon: 130.40 },
+        { name: "北九州市", lat: 33.88, lon: 130.88 },
+        { name: "佐賀市", lat: 33.26, lon: 130.30 },
+        { name: "佐世保市", lat: 33.18, lon: 129.72 },
+        { name: "長崎市", lat: 32.75, lon: 129.88 },
+        { name: "対馬市", lat: 34.20, lon: 129.29 },
+        { name: "熊本市", lat: 32.79, lon: 130.71 },
+        { name: "阿蘇市", lat: 32.94, lon: 131.12 },
+        { name: "大分市", lat: 33.24, lon: 131.61 },
+        { name: "宮崎市", lat: 31.91, lon: 131.42 },
+        { name: "鹿児島市", lat: 31.56, lon: 130.56 },
+        { name: "出水市", lat: 32.08, lon: 130.35 },
+        { name: "屋久島", lat: 30.34, lon: 130.51 }
+    ],
+    "沖縄": [
+        { name: "那覇市", lat: 26.21, lon: 127.68 },
+        { name: "与那国島", lat: 24.47, lon: 123.01 },
+        { name: "石垣市", lat: 24.34, lon: 124.16 },
+        { name: "奄美市", lat: 28.37, lon: 129.48 },
+        { name: "南鳥島", lat: 24.28, lon: 153.98 },
+        { name: "小笠原諸島", lat: 27.09, lon: 142.19 }
+    ],
+    "南極": [
+        { name: "昭和基地", lat: -69.00, lon: 39.58 }
+    ]
+};
+    // 1. 全地点をフラットな配列に展開
+    const allPoints = [];
+    for (const region in locations) {
+        locations[region].forEach(loc => {
+            allPoints.push({ ...loc, region });
+        });
+    }
+
+    // 2. 緯度・経度を連結して一括リクエスト
+    const lats = allPoints.map(p => p.lat).join(',');
+    const lons = allPoints.map(p => p.lon).join(',');
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&daily=weathercode,temperature_2m_max,precipitation_probability_max&timezone=Asia%2FTokyo`;
 
     let report = mode === 'morning' ? "☀️ 本日の天気予報をお知らせします\n\n" : "🌙 明日の天気予報をお知らせします\n\n";
-    const dayOffset = mode === 'morning' ? 0 : 1; // 今日なら0, 明日なら1
+    const dayOffset = mode === 'morning' ? 0 : 1;
 
-    // 地方ごとにループ
-    for (const region in locations) {
-        report += `【${region}】\n`;
-        
-        for (const loc of locations[region]) {
-            try {
-                // APIリクエスト（1地点ずつ取得）
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&daily=weathercode,temperature_2m_max,precipitation_probability_max&timezone=Asia%2FTokyo`;
-                const res = await fetch(url);
-                const data = await res.json();
+    try {
+        console.log(`🌐 ${allPoints.length}地点のデータを一括取得中...`);
+        const res = await fetch(url);
+        const data = await res.json();
 
-                const weatherCode = data.daily.weathercode[dayOffset];
-                const maxTemp = Math.round(data.daily.temperature_2m_max[dayOffset]);
-                const prob = data.daily.precipitation_probability_max[dayOffset];
+        // APIはリクエストした順番に配列でデータを返してくる（単一地点の場合はオブジェクト、複数なら配列）
+        const results = Array.isArray(data) ? data : [data];
 
-                // 天気コード変換（簡易版）
+        // 3. 地方ごとに整理してレポート作成
+        let currentIndex = 0;
+        for (const region in locations) {
+            report += `【${region}】\n`;
+            
+            for (const loc of locations[region]) {
+                const targetData = results[currentIndex].daily;
+                const weatherCode = targetData.weathercode[dayOffset];
+                const maxTemp = Math.round(targetData.temperature_2m_max[dayOffset]);
+                const prob = targetData.precipitation_probability_max[dayOffset];
+
                 let emoji = "☁️";
                 if (weatherCode <= 1) emoji = "☀️";
                 else if (weatherCode <= 3) emoji = "⛅";
                 else if (weatherCode >= 51) emoji = "☔";
 
-                report += `${loc.name}: ${emoji} 最高${maxTemp}℃ 降水${prob}%\n`;
-                
-                // API負荷軽減のためわずかに待機（0.1秒）
-                await new Promise(resolve => setTimeout(resolve, 100));
-            } catch (e) {
-                report += `${loc.name}: データ取得エラー\n`;
+                report += `${loc.name}: ${emoji} ${maxTemp}℃ ${prob}%\n`;
+                currentIndex++;
             }
+            report += "\n";
         }
-        report += "\n"; // 地方ごとに改行
+
+    } catch (e) {
+        console.error("🚨 天気一括取得エラー:", e);
+        return "⚠️ 天気データの取得に失敗しました。";
     }
 
     return report;
@@ -1144,21 +1190,29 @@ async function main() {
         const hour = now.getHours();
         const min = now.getMinutes();
 
-        const isMorningWeather = (hour === 7 && min <= 10);
-        const isEveningWeather = (hour === 19 && min <= 10);
+        // 判定フラグ（実行ウィンドウを15分に少し広げると、Actionsの遅延に強くなります）
+        const isMorning = (hour === 7 && min <= 15);
+        const isEvening = (hour === 19 && min <= 15);
+        const isMidnight = (hour === 0 && min <= 15);
 
         // 2. ☀️ 天気予報モードの実行
-        if (isMorningWeather || isEveningWeather) {
+        if (isMorning || isEvening || isMidnight) {
             console.log("🌡 天気予報投稿モード始動...");
-            const mode = isMorningWeather ? 'morning' : 'evening';
+
+            // 朝(7時)なら「今日」、それ以外(19時/0時)なら「明日」のデータを取得
+            const mode = isMorning ? 'morning' : 'evening';
             const weatherContent = await generateWeatherReport(mode);
+
+            // 注釈（CW）の文字を決定
+            const cwText = isMorning ? "☀️ 本日の天気予報" : "🌙 明日の天気予報";
 
             await requestToMk('notes/create', {
                 text: weatherContent,
-                cw: isMorningWeather ? "☀️ 本日の天気予報" : "🌙 明日の天気予報",
+                cw: cwText,
                 visibility: "public"
             });
-            console.log("✅ 天気予報をパブリックで投稿しました。");
+            
+            console.log(`✅ 天気予報(${mode})をパブリックで投稿しました。`);
 
             // 4秒待機
             console.log("⏳ 4秒待機してマルコフ連鎖を開始します...");
