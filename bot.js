@@ -1044,10 +1044,40 @@ const locations = {
                 const maxTemp = Math.round(targetData.temperature_2m_max[dayOffset]);
                 const prob = targetData.precipitation_probability_max[dayOffset];
 
-                let emoji = "☁️";
-                if (weatherCode <= 1) emoji = "☀️";
-                else if (weatherCode <= 3) emoji = "⛅";
-                else if (weatherCode >= 51) emoji = "☔";
+// 天気コード変換（WMO準拠）
+                let emoji = "☁️"; // デフォルトは曇り
+
+                if (weatherCode <= 1) {
+                    emoji = "☀️"; // 快晴・晴れ
+                } else if (weatherCode <= 3) {
+                    emoji = "⛅"; // 晴れ時々曇り
+                } else if (weatherCode === 45 || weatherCode === 48) {
+                    emoji = "🌫️"; // 霧
+                } else if (weatherCode >= 51 && weatherCode <= 55) {
+                    emoji = "☔"; // 小雨・霧雨
+                } else if (weatherCode === 56 || weatherCode === 57 || weatherCode === 66 || weatherCode === 67) {
+                    emoji = "🧊☔"; // 着氷性の雨（フリージングレイン）
+                } else if (weatherCode >= 61 && weatherCode <= 65) {
+                    // 雨の強さ判定
+                    if (weatherCode === 61) emoji = "☔"; // 普通の雨
+                    if (weatherCode === 63) emoji = "🟨☔"; // 強い雨
+                    if (weatherCode === 65) emoji = "🟥☔"; // 激しい雨
+                } else if (weatherCode >= 71 && weatherCode <= 75) {
+                    emoji = "❄️"; // 雪
+                } else if (weatherCode === 77) {
+                    emoji = "🧊"; // 霧雪・あられ
+                } else if (weatherCode >= 80 && weatherCode <= 82) {
+                    // にわか雨（大雨系）
+                    if (weatherCode === 80) emoji = "☔";
+                    if (weatherCode === 81) emoji = "🟥☔"; // 激しいにわか雨
+                    if (weatherCode === 82) emoji = "⬛☔"; // 猛烈な雨
+                } else if (weatherCode >= 85 && weatherCode <= 86) {
+                    emoji = "⛄"; // 大雪（雪のシャワー）
+                } else if (weatherCode >= 95 && weatherCode <= 99) {
+                    // 雷・雷雨
+                    if (weatherCode === 95) emoji = "⚡"; // 雷
+                    else emoji = "⛈️"; // 強い雷雨
+                }
 
                 report += `${loc.name}: ${emoji} ${maxTemp}℃ ${prob}%\n`;
                 currentIndex++;
