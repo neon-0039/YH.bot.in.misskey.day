@@ -582,8 +582,8 @@ ${config.characterSetting}
 
         replyCount++;
 
-        console.log("API制限回避のため5秒待機します...");
-        await sleep(5000);
+        console.log("API制限回避のため10秒待機します...");
+        await sleep(10000);
     }
 
 }
