@@ -1013,9 +1013,6 @@ const locationsGroupB = {
 };
 async function generateWeatherReport(mode, locations) {
     // 1. 指定されたlocationsをフラットな配列に展開
-    // 地点データ定義（地方ごとに配列を作成）
-// --- グループ1: 東日本・北日本・樺太・千島列島 ---
-   
     const allPoints = [];
     for (const region in locations) {
         locations[region].forEach(loc => {
@@ -1023,19 +1020,36 @@ async function generateWeatherReport(mode, locations) {
         });
     }
 
-    const lats = allPoints.map(p => p.lat).join(',');
-    const lons = allPoints.map(p => p.lon).join(',');
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=weathercode,temperature_2m,precipitation_probability&timezone=Asia%2FTokyo`;
-
-    let report = mode === 'morning' ? "☀️ 本日の広域予報\n\n" : "🌙 明日の広域予報\n\n";
-    const baseHour = mode === 'morning' ? 0 : 24;
-    const amIdx = baseHour + 9;  // 9:00
-    const pmIdx = baseHour + 15; // 15:00
+    // --- 【修正ポイント】リクエストを分割して取得する ---
+    const CHUNK_SIZE = 40; // 1回のリクエストを40地点までに制限（400エラー対策）
+    let allResults = [];
 
     try {
-        const res = await fetch(url);
-        const data = await res.json();
-        const results = Array.isArray(data) ? data : [data];
+        for (let i = 0; i < allPoints.length; i += CHUNK_SIZE) {
+            const chunk = allPoints.slice(i, i + CHUNK_SIZE);
+            const lats = chunk.map(p => p.lat).join(',');
+            const lons = chunk.map(p => p.lon).join(',');
+            
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=weathercode,temperature_2m,precipitation_probability&timezone=Asia%2FTokyo`;
+
+            console.log(`🌐 データ取得中... (${i + 1}〜${Math.min(i + CHUNK_SIZE, allPoints.length)}地点目)`);
+            const res = await fetch(url);
+            
+            if (!res.ok) throw new Error(`API Error ${res.status}`);
+            
+            const data = await res.json();
+            const chunkResults = Array.isArray(data) ? data : [data];
+            allResults = allResults.concat(chunkResults); // 取得したデータを合体させる
+
+            // 連続リクエストで怒られないように少しだけ待機
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // --- ここからは元のロジックと同じ ---
+        let report = mode === 'morning' ? "☀️ 本日の広域予報\n\n" : "🌙 明日の広域予報\n\n";
+        const baseHour = mode === 'morning' ? 0 : 24;
+        const amIdx = baseHour + 9;  // 9:00
+        const pmIdx = baseHour + 15; // 15:00
 
         const getEmoji = (code) => {
             if (code <= 1) return "☀️";
@@ -1060,26 +1074,26 @@ async function generateWeatherReport(mode, locations) {
         for (const region in locations) {
             report += `【${region}】\n`;
             for (const loc of locations[region]) {
-                const h = results[currentIndex].hourly;
+                // 合体させたallResultsから順番に取り出す
+                const h = allResults[currentIndex].hourly;
                 const amEmoji = getEmoji(h.weathercode[amIdx]);
                 const amTemp = Math.round(h.temperature_2m[amIdx]);
                 const pmEmoji = getEmoji(h.weathercode[pmIdx]);
                 const pmTemp = Math.round(h.temperature_2m[pmIdx]);
                 
-                // 降水確率はその日の最大値を採用
                 const dayProb = Math.max(...h.precipitation_probability.slice(baseHour, baseHour + 24));
 
-                // 出力例: 横浜市: ☀️14℃→⛅18℃ (10%)
                 report += `${loc.name}: ${amEmoji}${amTemp}℃→${pmEmoji}${pmTemp}℃ (${dayProb}%)\n`;
                 currentIndex++;
             }
             report += "\n";
         }
+        return report;
+
     } catch (e) {
         console.error("🚨 エラー:", e);
         return "⚠️ データ取得エラーが発生しました。";
     }
-    return report;
 }
 // ================================
 // 🧠 マルコフ生成（進化版）
