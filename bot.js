@@ -905,12 +905,8 @@ const locationsGroupA = {
         { name: "津市", lat: 34.72, lon: 136.51 },
         { name: "鳥羽市", lat: 34.48, lon: 136.84 },
         { name: "長島", lat: 35.05, lon: 136.70 }
-    ]
-};
-
-// --- グループ2: 北陸・西日本・沖縄・海外・極地 ---
-const locationsGroupB = {
-    "北陸": [
+    ],
+        "北陸": [
         { name: "富山市", lat: 36.70, lon: 137.21 },
         { name: "高岡市", lat: 36.75, lon: 137.01 },
         { name: "金沢市", lat: 36.56, lon: 136.65 },
@@ -921,7 +917,11 @@ const locationsGroupB = {
         { name: "敦賀市", lat: 35.65, lon: 136.06 },
         { name: "小浜市", lat: 35.49, lon: 135.74 },
         { name: "大野市", lat: 35.98, lon: 136.48 }
-    ],
+    ]
+};
+
+// --- グループ2: 北陸・西日本・沖縄・海外・極地 ---
+const locationsGroupB = {
     "近畿": [
         { name: "京都市", lat: 35.01, lon: 135.76 },
         { name: "舞鶴市", lat: 35.47, lon: 135.33 },
@@ -1012,7 +1012,6 @@ const locationsGroupB = {
     ]
 };
 async function generateWeatherReport(mode, locations) {
-    // 1. 指定されたlocationsをフラットな配列に展開
     const allPoints = [];
     for (const region in locations) {
         locations[region].forEach(loc => {
@@ -1020,80 +1019,93 @@ async function generateWeatherReport(mode, locations) {
         });
     }
 
-    // --- 【修正ポイント】リクエストを分割して取得する ---
-    const CHUNK_SIZE = 40; // 1回のリクエストを40地点までに制限（400エラー対策）
+    // CHUNK_SIZEを30に下げて、リクエスト単位の安全性をさらに高める
+    const CHUNK_SIZE = 30; 
     let allResults = [];
 
-    try {
-        for (let i = 0; i < allPoints.length; i += CHUNK_SIZE) {
-            const chunk = allPoints.slice(i, i + CHUNK_SIZE);
-            const lats = chunk.map(p => p.lat).join(',');
-            const lons = chunk.map(p => p.lon).join(',');
-            
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=weathercode,temperature_2m,precipitation_probability&timezone=Asia%2FTokyo`;
+    // --- 分割リクエスト実行 ---
+    for (let i = 0; i < allPoints.length; i += CHUNK_SIZE) {
+        const chunk = allPoints.slice(i, i + CHUNK_SIZE);
+        const lats = chunk.map(p => p.lat).join(',');
+        const lons = chunk.map(p => p.lon).join(',');
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=weathercode,temperature_2m,precipitation_probability&timezone=Asia%2FTokyo`;
 
-            console.log(`🌐 データ取得中... (${i + 1}〜${Math.min(i + CHUNK_SIZE, allPoints.length)}地点目)`);
+        try {
+            console.log(`🌐 取得中: ${i + 1}〜${Math.min(i + CHUNK_SIZE, allPoints.length)}地点`);
             const res = await fetch(url);
             
-            if (!res.ok) throw new Error(`API Error ${res.status}`);
+            // 400エラー等が出た場合でも、このループだけ失敗させて次に進む
+            if (!res.ok) {
+                console.error(`⚠️ APIエラー (${res.status}): このチャンクをスキップします`);
+                // 失敗した地点数分、nullで埋めてインデックスがずれないようにする
+                allResults = allResults.concat(new Array(chunk.length).fill(null));
+                continue;
+            }
             
             const data = await res.json();
             const chunkResults = Array.isArray(data) ? data : [data];
-            allResults = allResults.concat(chunkResults); // 取得したデータを合体させる
+            allResults = allResults.concat(chunkResults);
 
-            // 連続リクエストで怒られないように少しだけ待機
-            await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (e) {
+            console.error("🚨 通信エラー:", e);
+            // 失敗した地点数分、nullで埋める
+            allResults = allResults.concat(new Array(chunk.length).fill(null));
         }
-
-        // --- ここからは元のロジックと同じ ---
-        let report = mode === 'morning' ? "☀️ 本日の広域予報\n\n" : "🌙 明日の広域予報\n\n";
-        const baseHour = mode === 'morning' ? 0 : 24;
-        const amIdx = baseHour + 9;  // 9:00
-        const pmIdx = baseHour + 15; // 15:00
-
-        const getEmoji = (code) => {
-            if (code <= 1) return "☀️";
-            if (code <= 3) return "⛅";
-            if (code === 45 || code === 48) return "🌫️";
-            if (code >= 51 && code <= 55) return "☔";
-            if (code === 56 || code === 57 || code === 66 || code === 67) return "🧊☔";
-            if (code === 61) return "☔";
-            if (code === 63) return "🟨☔";
-            if (code === 65) return "🟥☔";
-            if (code >= 71 && code <= 75) return "❄️";
-            if (code === 77) return "🧊";
-            if (code === 80) return "☔";
-            if (code === 81) return "🟥☔";
-            if (code === 82) return "⬛☔";
-            if (code >= 85 && code <= 86) return "⛄";
-            if (code >= 95) return "⛈️";
-            return "☁️";
-        };
-
-        let currentIndex = 0;
-        for (const region in locations) {
-            report += `【${region}】\n`;
-            for (const loc of locations[region]) {
-                // 合体させたallResultsから順番に取り出す
-                const h = allResults[currentIndex].hourly;
-                const amEmoji = getEmoji(h.weathercode[amIdx]);
-                const amTemp = Math.round(h.temperature_2m[amIdx]);
-                const pmEmoji = getEmoji(h.weathercode[pmIdx]);
-                const pmTemp = Math.round(h.temperature_2m[pmIdx]);
-                
-                const dayProb = Math.max(...h.precipitation_probability.slice(baseHour, baseHour + 24));
-
-                report += `${loc.name}: ${amEmoji}${amTemp}℃→${pmEmoji}${pmTemp}℃ (${dayProb}%)\n`;
-                currentIndex++;
-            }
-            report += "\n";
-        }
-        return report;
-
-    } catch (e) {
-        console.error("🚨 エラー:", e);
-        return "⚠️ データ取得エラーが発生しました。";
+        // サーバー負荷軽減
+        await new Promise(r => setTimeout(r, 400));
     }
+
+    // --- レポート組み立て ---
+    let report = mode === 'morning' ? "☀️ 本日の広域予報\n\n" : "🌙 明日の広域予報\n\n";
+    const baseHour = mode === 'morning' ? 0 : 24;
+    const amIdx = baseHour + 9;
+    const pmIdx = baseHour + 15;
+
+    const getEmoji = (c) => {
+        if (c <= 1) return "☀️"; if (c <= 3) return "⛅";
+        if (c === 45 || c === 48) return "🌫️";
+        if (c >= 51 && c <= 55) return "☔";
+        if (c === 56 || c === 57 || c === 66 || c === 67) return "🧊☔";
+        if (c === 61 || c === 80) return "☔";
+        if (c === 63 || c === 81) return "🟨☔";
+        if (c === 65 || c === 82) return "🟥☔";
+        if (c >= 71 && c <= 75) return "❄️"; if (c === 77) return "🧊";
+        if (c >= 85 && c <= 86) return "⛄"; if (c >= 95) return "⛈️";
+        return "☁️";
+    };
+
+    let currentIndex = 0;
+    for (const region in locations) {
+        let regionText = `【${region}】\n`;
+        let hasDataInRegion = false;
+
+        for (const loc of locations[region]) {
+            const data = allResults[currentIndex];
+            
+            if (data && data.hourly) {
+                const h = data.hourly;
+                const amE = getEmoji(h.weathercode[amIdx]);
+                const amT = Math.round(h.temperature_2m[amIdx]);
+                const pmE = getEmoji(h.weathercode[pmIdx]);
+                const pmT = Math.round(h.temperature_2m[pmIdx]);
+                const prob = Math.max(...h.precipitation_probability.slice(baseHour, baseHour + 24));
+
+                // 2100文字を超えているため、半角スペースを詰め、記号をダイエット
+                regionText += `${loc.name}:${amE}${amT}→${pmE}${pmT}(${prob}%)\n`;
+                hasDataInRegion = true;
+            } else {
+                // データがない地点はエラー表示にするが処理は止めない
+                regionText += `${loc.name}:⚠️取得失敗\n`;
+            }
+            currentIndex++;
+        }
+        
+        if (hasDataInRegion) {
+            report += regionText + "\n";
+        }
+    }
+
+    return report;
 }
 // ================================
 // 🧠 マルコフ生成（進化版）
