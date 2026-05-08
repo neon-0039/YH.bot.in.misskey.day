@@ -1015,7 +1015,7 @@ async function generateWeatherReport(mode, locations) {
     // 1. 指定されたlocationsをフラットな配列に展開
     // 地点データ定義（地方ごとに配列を作成）
 // --- グループ1: 東日本・北日本・樺太・千島列島 ---
-
+   
     const allPoints = [];
     for (const region in locations) {
         locations[region].forEach(loc => {
@@ -1248,6 +1248,7 @@ async function main() {
 
         // 5. 💬 メンション（返信）処理
         await handleMentions(me);
+// 1. 🕒 時間判定（日本時間）
 const now = new Date(new Date().toLocaleString("ja-JP", {timeZone: "Asia/Tokyo"}));
 const hour = now.getHours();
 const min = now.getMinutes();
@@ -1303,7 +1304,6 @@ if (isMorning || isEvening || isMidnight) {
     console.log("⏳ 4秒待機してマルコフ連鎖を開始します...");
     await new Promise(resolve => setTimeout(resolve, 4000));
 }
-
         // 3. 🧠 通常の学習＆マルコフ連鎖フェーズ
         console.log("📖 タイムラインを取得して学習を開始します...");
             
