@@ -1317,7 +1317,7 @@ if (isMorning || isEvening || isMidnight) {
     console.log("📡 グループB（西日本・海外・極地）取得中...");
     const reportB = await generateWeatherReport(mode, locationsGroupB);
     const cwB = `${isMorning ? '☀️' : '🌙'} ${dayLabel}の天気予報【西日本・南方・海外極地】`;
-
+    await sleep(10000);
     await requestToMk('notes/create', {
         text: reportB + legend,
         cw: cwB,
