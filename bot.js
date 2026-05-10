@@ -977,6 +977,7 @@ const locationsGroupB = {
     ]
 };
 async function generateWeatherReport(mode, locations) {
+    // 1. 全地点（AとBの両方を含むオブジェクトを想定）をフラットに展開
     const allPoints = [];
     for (const region in locations) {
         locations[region].forEach(loc => {
@@ -984,11 +985,10 @@ async function generateWeatherReport(mode, locations) {
         });
     }
 
-    // CHUNK_SIZEを30に下げて、リクエスト単位の安全性をさらに高める
-    const CHUNK_SIZE = 30; 
+    // URLの長さ制限対策として分割取得は継続（ここは安定のため必須）
+    const CHUNK_SIZE = 40; 
     let allResults = [];
 
-    // --- 分割リクエスト実行 ---
     for (let i = 0; i < allPoints.length; i += CHUNK_SIZE) {
         const chunk = allPoints.slice(i, i + CHUNK_SIZE);
         const lats = chunk.map(p => p.lat).join(',');
@@ -996,32 +996,24 @@ async function generateWeatherReport(mode, locations) {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=weathercode,temperature_2m,precipitation_probability&timezone=Asia%2FTokyo`;
 
         try {
-            console.log(`🌐 取得中: ${i + 1}〜${Math.min(i + CHUNK_SIZE, allPoints.length)}地点`);
+            console.log(`📡 データ取得中... (${i + 1}〜${Math.min(i + CHUNK_SIZE, allPoints.length)}地点目)`);
             const res = await fetch(url);
-            
-            // 400エラー等が出た場合でも、このループだけ失敗させて次に進む
             if (!res.ok) {
-                console.error(`⚠️ APIエラー (${res.status}): このチャンクをスキップします`);
-                // 失敗した地点数分、nullで埋めてインデックスがずれないようにする
+                console.error(`⚠️ APIエラー: ${res.status}`);
                 allResults = allResults.concat(new Array(chunk.length).fill(null));
                 continue;
             }
-            
             const data = await res.json();
-            const chunkResults = Array.isArray(data) ? data : [data];
-            allResults = allResults.concat(chunkResults);
-
+            allResults = allResults.concat(Array.isArray(data) ? data : [data]);
         } catch (e) {
-            console.error("🚨 通信エラー:", e);
-            // 失敗した地点数分、nullで埋める
+            console.error("🚨 取得失敗:", e);
             allResults = allResults.concat(new Array(chunk.length).fill(null));
         }
-        // サーバー負荷軽減
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 300));
     }
 
-    // --- レポート組み立て ---
-    let report = mode === 'morning' ? "☀️ 本日の広域予報\n\n" : "🌙 明日の広域予報\n\n";
+    // --- レポート組み立て（文字数ダイエットを徹底） ---
+    let report = mode === 'morning' ? "☀️本日の広域予報\n" : "🌙明日の広域予報\n";
     const baseHour = mode === 'morning' ? 0 : 24;
     const amIdx = baseHour + 9;
     const pmIdx = baseHour + 15;
@@ -1041,12 +1033,10 @@ async function generateWeatherReport(mode, locations) {
 
     let currentIndex = 0;
     for (const region in locations) {
-        let regionText = `【${region}】\n`;
-        let hasDataInRegion = false;
-
+        // 地域名も短縮：【北海道】→ ●北海道
+        report += `\n●${region}\n`;
         for (const loc of locations[region]) {
             const data = allResults[currentIndex];
-            
             if (data && data.hourly) {
                 const h = data.hourly;
                 const amE = getEmoji(h.weathercode[amIdx]);
@@ -1055,20 +1045,17 @@ async function generateWeatherReport(mode, locations) {
                 const pmT = Math.round(h.temperature_2m[pmIdx]);
                 const prob = Math.max(...h.precipitation_probability.slice(baseHour, baseHour + 24));
 
-                // 2100文字を超えているため、半角スペースを詰め、記号をダイエット
-                regionText += `${loc.name}:${amE}${amT}→${pmE}${pmT}(${prob}%)\n`;
-                hasDataInRegion = true;
+                // 極限まで詰め：℃を削除、コロンを半角に
+                report += `${loc.name}:${amE}${amT}→${pmE}${pmT}(${prob}%)\n`;
             } else {
-                // データがない地点はエラー表示にするが処理は止めない
-                regionText += `${loc.name}:⚠️取得失敗\n`;
+                report += `${loc.name}:error\n`;
             }
             currentIndex++;
         }
-        
-        if (hasDataInRegion) {
-            report += regionText + "\n";
-        }
     }
+
+    // 最後に凡例を足す（ここも短縮）
+    report += "\n【凡例】9時→15時(降水最大%)\n🟨激しい雨/🟥雷雨/🧊氷";
 
     return report;
 }
@@ -1239,57 +1226,50 @@ async function main() {
 
         // 5. 💬 メンション（返信）処理
         await handleMentions(me);
-// 1. 🕒 時間判定（日本時間）
-const now = new Date(new Date().toLocaleString("ja-JP", {timeZone: "Asia/Tokyo"}));
+// 1. 🕒 時間判定（日本時間）const now = new Date(new Date().toLocaleString("ja-JP", {timeZone: "Asia/Tokyo"}));
 const hour = now.getHours();
 const min = now.getMinutes();
 
-// 判定フラグ（GitHub Actionsの実行遅延を考慮し、15分幅を持たせています）
+// 判定フラグ
 const isMorning = (hour === 7 && min <= 15);
 const isEvening = (hour === 19 && min <= 15);
 const isMidnight = (hour === 0 && min <= 15);
 
-// 2. ☀️ 天気予報モードの実行
+// 2. ☀️ 天気予報モードの実行（一括統合版）
 if (isMorning || isEvening || isMidnight) {
-    console.log("🌡 天気予報投稿モード始動（2段階投稿）...");
+    console.log("🌡 天気予報・一括投稿モード始動...");
 
-    // 朝(7時)なら「今日」、それ以外(19時/0時)なら「明日」のデータを取得
     const mode = isMorning ? 'morning' : 'evening';
     const dayLabel = isMorning ? "本日" : "明日";
 
-    // 凡例の作成
+    // 凡例をさらに短縮（文字数節約）
     const legend = 
-        "\n【凡例】\n" +
-        "表示: [午前9時] → [午後15時] (1日の最大降水確率%)\n" +
-        "🟨☔=強い雨 / 🟥☔=激しい雨 / ⬛☔=猛烈な雨 / ⛈️=雷雨 / 🧊=氷・あられ";
+        "\n【凡例】9時→15時(最大降水%)\n" +
+        "🟨激雨/🟥雷雨/🧊氷";
 
-    // --- 第1弾：東日本・北日本・北方領土・樺太 ---
-    console.log("📡 グループA（東日本・北日本）取得中...");
-    const reportA = await generateWeatherReport(mode, locationsGroupA);
-    const cwA = `${isMorning ? '☀️' : '🌙'} ${dayLabel}の天気予報【東日本・北日本・樺太】`;
+    // 全地点を統合
+    const combinedLocations = { ...locationsGroupA, ...locationsGroupB };
 
-    await requestToMk('notes/create', {
-        text: reportA + legend,
-        cw: cwA,
-        visibility: "public"
-    });
+    // データ取得
+    const finalReport = await generateWeatherReport(mode, combinedLocations);
+    
+    console.log(`📝 レポート作成完了（推定文字数: ${finalReport.length}文字）`);
 
-    // 連続投稿制限回避のための待機
-    console.log("⏳ 5秒待機して第2弾を投稿します...");
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // サーバーの門番が落ち着くのを待ってから一気に投稿
+    console.log("⏳ 投稿前に3秒待機...");
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
-    // --- 第2弾：西日本・沖縄・海外・極地 ---
-    console.log("📡 グループB（西日本・海外・極地）取得中...");
-    const reportB = await generateWeatherReport(mode, locationsGroupB);
-    const cwB = `${isMorning ? '☀️' : '🌙'} ${dayLabel}の天気予報【西日本・南方・海外極地】`;
-    await sleep(10000);
-    await requestToMk('notes/create', {
-        text: reportB + legend,
-        cw: cwB,
-        visibility: "public"
-    });
-
-    console.log(`✅ 天気予報(${mode})を2つのノートに分けて投稿しました。`);
+    try {
+        await requestToMk('notes/create', {
+            text: finalReport + legend,
+            cw: `${isMorning ? '☀️' : '🌙'} ${dayLabel}の全国広域予報`,
+            visibility: "public"
+        });
+        console.log(`✅ 全国広域予報(${mode})を一括投稿しました。`);
+    } catch (e) {
+        console.error("🚨 投稿に失敗しました。文字数制限またはサーバーエラーの可能性があります。");
+        throw e; // エラーを投げてログに残す
+    }
 
     // マルコフ連鎖への移行待機
     console.log("⏳ 4秒待機してマルコフ連鎖を開始します...");
