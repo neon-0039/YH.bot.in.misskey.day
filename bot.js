@@ -1230,10 +1230,17 @@ async function main() {
 const hour = now.getHours();
 const min = now.getMinutes();
 
-// 判定フラグ
-const isMorning = (hour === 7 && min <= 15);
-const isEvening = (hour === 19 && min <= 15);
-const isMidnight = (hour === 0 && min <= 15);
+// 判定フラグ// 日本時間の現在時刻を取得
+const nowJST = new Date(new Date().toLocaleString("ja-JP", {timeZone: "Asia/Tokyo"}));
+const hourJST = nowJST.getHours();
+const minJST = nowJST.getMinutes();
+
+// 判定フラグ（日本時間で指定）
+const isMorning  = (hourJST === 7  && minJST <= 15); // 日本時間 朝7:00〜7:15
+const isEvening  = (hourJST === 19 && minJST <= 15); // 日本時間 夜19:00〜19:15
+const isMidnight = (hourJST === 0  && minJST <= 15); // 日本時間 深夜0:00〜0:15
+
+console.log(`【時間チェック】日本時間: ${hourJST}:${minJST} / 判定: 朝=${isMorning}, 夜=${isEvening}, 深夜=${isMidnight}`);
 
 // 2. ☀️ 天気予報モードの実行（一括統合版）
 if (isMorning || isEvening || isMidnight) {
