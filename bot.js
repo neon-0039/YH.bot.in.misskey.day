@@ -871,7 +871,7 @@ async function generateWeatherReport(mode, locations) {
         }
     }
 
-    report += "\n【凡例】9時→15時(降水最大%)\n🟨激しい雨/🟥雷雨/🧊氷";
+    report += "\n【凡例】\n表示: [午前9時] → [午後15時] (1日の最大降水確率%)\n🟨☔=強い雨 / 🟥☔=激しい雨 / ⬛☔=猛烈な雨 / ⛈️=雷雨 / 🧊=氷・あられ";
 
     return report;
 }
