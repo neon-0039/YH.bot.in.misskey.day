@@ -1,210 +1,198 @@
 // ================================
 // 🔰 基本インポート
 // ================================
-import fs, { existsSync, readFileSync } from 'fs';
+import fs from 'fs';
 import * as misskey from 'misskey-js';
 import axios from 'axios';
 import { google } from 'googleapis';
 import TinySegmenter from 'tiny-segmenter';
-
-//test
-        import http from 'http';
-        import https from 'https';
-
+import http from 'http';
+import https from 'https';
 
 console.log("=== DEBUG START ===");
-
-// ================================
-// 🧠 JSON.parse 監視（HTML誤爆検知）
-// ================================
-const nativeParse = JSON.parse;
-JSON.parse = function(text, reviver) {
-    // 1. まずは普通にパースを試みる
-    try {
-        const result = nativeParse(text, reviver);
-        
-        // 成功したときにログを出したいならここ
-        console.log("JSONパース成功！"); 
-        
-        return result; // パースした結果を必ず返す
-    } catch (err) {
-        // 2. 失敗した（HTMLが返ってきた等）ときの処理
-        if (typeof text === 'string' && text.trim().startsWith('<!')) {
-            console.error("🚨 HTMLを検知しました");
-            console.error("内容(冒頭):", text.substring(0, 500));
-        }
-        throw err; // エラーはそのまま外に投げる
-    }
-};
-
-// ================================
-// 🔐 環境変数チェック（HTML混入検知）
-// ================================
-try {
-    const rawGdrive = process.env.GDRIVE_SERVICE_ACCOUNT;
-    if (rawGdrive && rawGdrive.trim().startsWith('<')) {
-        console.error("🚨 警告: 環境変数 GDRIVE_SERVICE_ACCOUNT の中身がすでに HTML です！");
-        console.error("冒頭部分:", rawGdrive.substring(0, 100));
-    }
-} catch (e) {}
 
 // ================================
 // 🧩 共通ユーティリティ
 // ================================
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const segmenter = new TinySegmenter();
-
 const particles = ["が", "の", "を", "と", "に", "から", "は", "も", "で"];
 
 // ================================
-// 🔑 APIキー管理（時間切替）
+// 🔐 環境変数チェック
 // ================================
-const keyMain = process.env.GEMINI_API_KEY;
-const keySub = process.env.GEMINI_API_KEY_SUB;
+function validateEnv() {
+    const required = ['MK_DOMAIN', 'MK_TOKEN', 'GEMINI_API_KEY', 'GDRIVE_SERVICE_ACCOUNT', 'GDRIVE_FILE_ID'];
+    const missing = required.filter(key => !process.env[key]);
+    
+    if (missing.length > 0) {
+        throw new Error(`Missing environment variables: ${missing.join(', ')}`);
+    }
 
-const now = new Date();
-const jstHour = (now.getUTCHours() + 9) % 24;
+    const rawGdrive = process.env.GDRIVE_SERVICE_ACCOUNT.trim();
+    if (rawGdrive.startsWith('<')) {
+        throw new Error('🚨 GDRIVE_SERVICE_ACCOUNT contains HTML. Check environment setup.');
+    }
+}
 
-const currentKey = (jstHour >= 12) ? keyMain : (keySub || keyMain);
+// ================================
+// 🔑 APIキー管理
+// ================================
+function selectAPIKey() {
+    const keyMain = process.env.GEMINI_API_KEY;
+    const keySub = process.env.GEMINI_API_KEY_SUB;
+    const now = new Date();
+    const jstHour = (now.getUTCHours() + 9) % 24;
+    const currentKey = (jstHour >= 12) ? keyMain : (keySub || keyMain);
 
-console.log(`Mainキーの長さ: ${keyMain?.length}, Subキーの長さ: ${keySub?.length}`);
-console.log(`【システム情報】現在時刻: ${jstHour}時 / 使用APIキー: ${jstHour >= 12 ? '午後(メイン)' : '午前(サブ)'}`);
+    console.log(`Mainキーの長さ: ${keyMain?.length}, Subキーの長さ: ${keySub?.length}`);
+    console.log(`【システム情報】現在時刻: ${jstHour}時 / 使用APIキー: ${jstHour >= 12 ? '午後(メイン)' : '午前(サブ)'}`);
+
+    return currentKey;
+}
 
 // ================================
 // 🤖 Misskey初期化
 // ================================
-const config = {
-    domain: process.env.MK_DOMAIN,
-    token: process.env.MK_TOKEN,
-    geminiKey: currentKey,
-    characterSetting: "あなたはやや内気で天然な性格の、人間をよく知らない女の子です。名前は夕立ヘルツです。必ず丁寧語で、ですます調で話してください。まだ人のことをあまり知らないので、どう接すればいいかわからないから、控えめな感じです。引っ込み思案です。語尾に「っ」がつくことがまあまああります。一人称は私、二人称はマスターです。褒められるけど内心嬉しいけど、ちょっとツンとしちゃう微ツンデレです。好きな食べ物は焼き鳥のねぎまで、塩派です。全長(身長)は146.7000cmです。UTAU音源でもあります。"
-};
-
-const mk = new misskey.api.APIClient({
-    origin: `https://${config.domain}`,
-    credential: config.token
-});
-
-// ================================
-// ☁️ Google Driveクライアント（統一版）
-// ================================
-async function getDriveAuth() {
-    const envData = process.env.GDRIVE_SERVICE_ACCOUNT;
-
-    if (!envData) {
-        throw new Error("Credentials env is empty.");
-    }
-
-    const credentials = JSON.parse(envData);
-
-    console.log("PRIVATE_KEY CHECK:", credentials.private_key.slice(0, 50));
-
-    credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-
-    const auth = new google.auth.JWT(
-        credentials.client_email,
-        null,
-        credentials.private_key,
-        ['https://www.googleapis.com/auth/drive']
-    );
-
-    await auth.authorize();
-
-    const getToken = async () => {
-        const token = await auth.getAccessToken();
-        return token?.token || token;
+function initializeMisskey() {
+    const config = {
+        domain: process.env.MK_DOMAIN.trim(),
+        token: process.env.MK_TOKEN.trim(),
+        characterSetting: "あなたはやや内気で天然な性格の、人間をよく知らない女の子です。名前は夕立ヘルツです。必ず丁寧語で、ですます調で話してください。まだ人のことをあまり知らないので、どう接すればいいかわからないから、控えめな感じです。引っ込み思案です。語尾に「っ」がつくことがまあまああります。一人称は私、二人称はマスターです。褒められるけど内心嬉しいけど、ちょっとツンとしちゃう微ツンデレです。好きな食べ物は焼き鳥のねぎまで、塩派です。全長(身長)は146.7000cmです。UTAU音源でもあります。"
     };
 
-    return {
-            auth,
-        files: {
-            get: async ({ fileId, alt = 'media' }) => {
-            const rawToken = await getToken();
-            const token = typeof rawToken === "string"
-                ? rawToken
-                : rawToken?.token;
+    const mk = new misskey.api.APIClient({
+        origin: `https://${config.domain}`,
+        credential: config.token
+    });
 
-            const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-            console.log("TOKEN TYPE:", typeof token, token?.slice?.(0, 20));
-            console.log("FILE ID:", fileId);
-            const res = await axios.get(url, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
+    return { mk, config };
+}
 
-                if (res.status < 200 || res.status >= 300) {
-                    const err = new Error(`Drive GET failed: ${res.status}`);
-                    err.response = res;
-                    throw err;
-                }
-
-                return res;
-            },
-
-            update: async ({ fileId, media }) => {
-                const token = await getToken();
-                const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`;
-
-                const res = await axios.patch(url, media.body, {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (res.status < 200 || res.status >= 300) {
-                    const err = new Error(`Drive UPDATE failed: ${res.status}`);
-                    err.response = res;
-                    throw err;
-                }
-
-                return res;
+// ================================
+// 🔊 JSON.parse監視（HTML誤爆検知）
+// ================================
+function enableJSONParseGuard() {
+    const nativeParse = JSON.parse;
+    JSON.parse = function(text, reviver) {
+        try {
+            const result = nativeParse(text, reviver);
+            console.log("✓ JSONパース成功");
+            return result;
+        } catch (err) {
+            if (typeof text === 'string' && text.trim().startsWith('<!')) {
+                console.error("🚨 HTMLを検知しました");
+                console.error("内容(冒頭):", text.substring(0, 500));
             }
+            throw err;
         }
     };
 }
+
+// ================================
+// ☁️ Google Driveクライアント
+// ================================
+async function getDriveAuth() {
+    try {
+        const envData = process.env.GDRIVE_SERVICE_ACCOUNT;
+        if (!envData) {
+            throw new Error("Credentials env is empty.");
+        }
+
+        const credentials = JSON.parse(envData);
+        console.log("✓ PRIVATE_KEY CHECK:", credentials.private_key.slice(0, 50));
+
+        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+
+        const auth = new google.auth.JWT(
+            credentials.client_email,
+            null,
+            credentials.private_key,
+            ['https://www.googleapis.com/auth/drive']
+        );
+
+        await auth.authorize();
+
+        const getToken = async () => {
+            const token = await auth.getAccessToken();
+            return token?.token || token;
+        };
+
+        return {
+            auth,
+            files: {
+                get: async ({ fileId, alt = 'media' }) => {
+                    const rawToken = await getToken();
+                    const token = typeof rawToken === "string" ? rawToken : rawToken?.token;
+
+                    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+                    console.log("TOKEN TYPE:", typeof token, token?.slice?.(0, 20));
+                    console.log("FILE ID:", fileId);
+
+                    const res = await axios.get(url, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    if (res.status < 200 || res.status >= 300) {
+                        throw new Error(`Drive GET failed: ${res.status}`);
+                    }
+
+                    return res;
+                },
+
+                update: async ({ fileId, media }) => {
+                    const token = await getToken();
+                    const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`;
+
+                    const res = await axios.patch(url, media.body, {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (res.status < 200 || res.status >= 300) {
+                        throw new Error(`Drive UPDATE failed: ${res.status}`);
+                    }
+
+                    return res;
+                }
+            }
+        };
+    } catch (e) {
+        console.error("❌ Google Drive認証失敗:", e.message);
+        throw e;
+    }
+}
+
 // ================================
 // 🌡️ 佐渡島チェッカー
 // ================================
 async function getSadoMinTemp() {
-
     try {
-
-        // 佐渡島中央付近
         const lat = 38.0187;
         const lon = 138.3683;
 
-        const url =
-            `https://api.open-meteo.com/v1/forecast` +
-            `?latitude=${lat}` +
-            `&longitude=${lon}` +
-            `&daily=temperature_2m_min` +
-            `&timezone=Asia%2FTokyo`;
-
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_min&timezone=Asia%2FTokyo`;
         const res = await axios.get(url);
 
-        const minTemp =
-            res.data?.daily?.temperature_2m_min?.[0];
+        const minTemp = res.data?.daily?.temperature_2m_min?.[0];
 
         if (minTemp === undefined) {
             return "佐渡島の気温取得に失敗しました…。";
         }
 
         return `今日の佐渡島の最低気温は ${minTemp}℃ です！`;
-
     } catch (e) {
-
-        console.error("佐渡島チェッカー失敗:", e.message);
-
+        console.error("❌ 佐渡島チェッカー失敗:", e.message);
         return "佐渡島の最低気温、今ちょっと観測できませんでした…。";
     }
 }
+
 // ================================
-// 🤖 Gemini問い合わせ（元コード維持）
+// 🤖 Gemini問い合わせ
 // ================================
-async function askGemini(prompt) {
-     
+async function askGemini(prompt, currentKey) {
     const modelPriority = [
         "gemini-3.1-flash-lite-preview",
         "gemini-3.1-flash-preview",
@@ -231,34 +219,28 @@ async function askGemini(prompt) {
         "親から将来の夢無くなりました(エラー)",
         "髪の毛の年越しARねぎま塩(エラー)",
         "枝豆あげるw(エラー)",
-        "もう帰りたい、眠い、学校なう！⊂(^ω^)⊃(エラー)"]
+        "もう帰りたい、眠い、学校なう！⊂(^ω^)⊃(エラー)"
+    ];
 
     const getRandomError = () =>
         errorMessages[Math.floor(Math.random() * errorMessages.length)];
 
     for (const modelId of modelPriority) {
-
         const url = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${currentKey}`;
 
         try {
-
-            console.log(`モデル試行中: ${modelId}`);
+            console.log(`📡 モデル試行中: ${modelId}`);
 
             const res = await axios.post(url, {
-                contents: [
-                    {
-                        role: "user",
-                        parts: [{ text: prompt }]
-                    }
-                ]
+                contents: [{
+                    role: "user",
+                    parts: [{ text: prompt }]
+                }]
             }, {
-                headers: {
-                    "Content-Type": "application/json"
-                }
+                headers: { "Content-Type": "application/json" }
             });
 
-            const text =
-                res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
             if (!text) {
                 console.warn("⚠️ レスポンスが空。次のモデルへ");
@@ -266,39 +248,33 @@ async function askGemini(prompt) {
             }
 
             return text;
-
         } catch (error) {
-
             const status = error.response?.status;
             const data = error.response?.data;
 
-            // 🔥 HTML検知（超重要）
             if (typeof data === "string" && data.startsWith("<!")) {
                 console.warn("⚠️ HTMLレスポンス検知 → 次のモデルへ");
                 continue;
             }
 
-            // 🔥 スキップ対象拡張
             if ([400, 404, 429].includes(status)) {
                 console.warn(`⚠️ ${modelId} スキップ (${status})`);
                 continue;
             }
 
-            console.error(`致命的エラー (${modelId}):`, error.message);
+            console.error(`❌ 致命的エラー (${modelId}):`, error.message);
             return getRandomError();
         }
     }
 
     return getRandomError();
-
 }
+
 // ================================
 // 🤝 フォロバ & リムバ
 // ================================
-async function handleFollowControl(my_id) {
-
+async function handleFollowControl(mk, my_id) {
     try {
-
         const followers = await mk.request('users/followers', {
             userId: my_id,
             limit: 50
@@ -312,72 +288,48 @@ async function handleFollowControl(my_id) {
         const followerIds = followers.map(f => f.followerId);
 
         for (const f of followers) {
-
             const target = f.follower;
 
-            if (
-                target &&
-                !target.isFollowing &&
-                !target.isBot &&
-                target.id !== my_id
-            ) {
-
-                await mk.request('following/create', {
-                    userId: target.id
-                })
-                .then(() => console.log(`[フォロバ成功]: @${target.username}`))
-                .catch(e => console.error(`[フォロバ失敗]: ${e.message}`));
+            if (target && !target.isFollowing && !target.isBot && target.id !== my_id) {
+                try {
+                    await mk.request('following/create', { userId: target.id });
+                    console.log(`✓ [フォロバ成功]: @${target.username}`);
+                } catch (e) {
+                    console.error(`✗ [フォロバ失敗]: @${target.username} - ${e.message}`);
+                }
             }
         }
 
         for (const f of following) {
-
             const target = f.followee;
 
-            if (
-                target &&
-                !followerIds.includes(target.id) &&
-                target.id !== my_id
-            ) {
-
-                await mk.request('following/delete', {
-                    userId: target.id
-                })
-                .then(() => console.log(`[リムーブ成功]: @${target.username} (片想い解除)`))
-                .catch(e => console.error(`[リムーブ失敗]: ${e.message}`));
+            if (target && !followerIds.includes(target.id) && target.id !== my_id) {
+                try {
+                    await mk.request('following/delete', { userId: target.id });
+                    console.log(`✓ [リムーブ成功]: @${target.username}`);
+                } catch (e) {
+                    console.error(`✗ [リムーブ失敗]: @${target.username} - ${e.message}`);
+                }
             }
         }
-
     } catch (e) {
-        console.log("フォロー整理処理でエラーが発生しましたが、続行します。");
+        console.error("⚠️ フォロー整理処理でエラー（続行します）:", e.message);
     }
 }
 
 // ================================
-// 💬 メンション処理（完全保持版）
+// 💬 メンション処理
 // ================================
-async function handleMentions(me) {
-    
-    console.log("メンション確認中...");
+async function handleMentions(mk, me, config, currentKey) {
+    console.log("📬 メンション確認中...");
 
-    const mentions = await mk.request('notes/mentions', {
-        limit: 12
-    });
-
+    const mentions = await mk.request('notes/mentions', { limit: 12 });
     let replyCount = 0;
 
     for (const note of mentions) {
-
         if (replyCount >= 6) break;
 
-        let reply_text = "";
-
-        if (
-            note.user.isBot ||
-            note.user.id === me.id ||
-            note.myReplyId ||
-            (note.repliesCount && note.repliesCount > 0)
-        ) {
+        if (note.user.isBot || note.user.id === me.id || note.myReplyId || (note.repliesCount && note.repliesCount > 0)) {
             continue;
         }
 
@@ -387,312 +339,192 @@ async function handleMentions(me) {
 
         if (!user_input) continue;
 
-        console.log(`${note.user.username} さんからのメンションを処理中...`);
+        console.log(`💬 ${note.user.username}さんからのメンションを処理中...`);
 
-        // --- リアクション ---
-        if (
-    user_input.includes("おみくじ") ||
-    user_input.includes("マルコフ") ||
-    user_input.includes("佐渡島チェッカー") ||
-    user_input.includes("佐渡ヶ島チェッカー")
-) {
+        let reply_text = "";
 
-    try {
+        // === リアクション処理 ===
+        if (user_input.includes("おみくじ") || user_input.includes("マルコフ") || user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) {
+            try {
+                let reactionEmoji = ":mk_hi:";
+                if (user_input.includes("おみくじ")) reactionEmoji = ":Shiropuyo_good:";
+                else if (user_input.includes("マルコフ")) reactionEmoji = ":Shiropuyo_galaxy:";
+                else if (user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) reactionEmoji = ":blobcatpnd_ryo:";
 
-        let reactionEmoji = ":mk_hi:";
-
-        if (user_input.includes("おみくじ")) {
-            reactionEmoji = ":Shiropuyo_good:";
-        } else if (user_input.includes("マルコフ")) {
-            reactionEmoji = ":Shiropuyo_galaxy:";
-        } else if (
-            user_input.includes("佐渡島チェッカー") ||
-            user_input.includes("佐渡ヶ島チェッカー")
-        ) {
-            reactionEmoji = ":blobcatpnd_ryo:";
+                await mk.request('notes/reactions/create', {
+                    noteId: note.id,
+                    reaction: reactionEmoji
+                });
+            } catch (reacErr) {
+                console.error("⚠️ リアクション失敗:", reacErr.message);
+            }
         }
 
-        await mk.request('notes/reactions/create', {
-            noteId: note.id,
-            reaction: reactionEmoji
-        });
-
-    } catch (reacErr) {
-        console.error("リアクション失敗:", reacErr.message);
-    }
-}
-        // ========================
-        // 🧠 マルコフ（旧仕様維持）
-        // ========================
+        // === マルコフ ===
         if (user_input.includes("マルコフ")) {
-
-            console.log("マルコフ連鎖モード（進化版）起動！");
-
-            const tl = await mk.request('notes/hybrid-timeline', {
-                limit: 72
-            });
+            console.log("🧠 マルコフ連鎖モード起動");
+            const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
 
             const tl_text = tl
                 .filter(n => n.text && n.user.id !== me.id)
-                .map(n =>
-                    n.text
-                        .replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '')
-                        .trim()
-                )
+                .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
                 .slice(0, 64)
                 .join(" ");
 
-            const regex =
-                /[\u4E00-\u9FFF]+|[\u3040-\u309F]+|[\u30A0-\u30FF]+|[\uFF65-\uFF9F]+|[a-zA-Z0-9]+|[^\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F\sa-zA-Z0-9]+/g;
-
+            const regex = /[\u4E00-\u9FFF]+|[\u3040-\u309F]+|[\u30A0-\u30FF]+|[\uFF65-\uFF9F]+|[a-zA-Z0-9]+|[^\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F\sa-zA-Z0-9]+/g;
             const words = tl_text.match(regex) || [];
 
             if (words.length > 0) {
-
                 const markovDict = {};
-
                 for (let i = 0; i < words.length - 1; i++) {
                     const w1 = words[i];
                     const w2 = words[i + 1];
-
-                    if (!markovDict[w1]) {
-                        markovDict[w1] = [];
-                    }
-
+                    if (!markovDict[w1]) markovDict[w1] = [];
                     markovDict[w1].push(w2);
                 }
 
-                const isSymbol = (str) =>
-                    /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
-
+                const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
                 const pickNextWord = (list) => {
-
                     if (!list || list.length === 0) return "";
-
-                    let candidate =
-                        list[Math.floor(Math.random() * list.length)];
-
+                    let candidate = list[Math.floor(Math.random() * list.length)];
                     if (isSymbol(candidate) && Math.random() < 0.6) {
-                        candidate =
-                            list[Math.floor(Math.random() * list.length)];
+                        candidate = list[Math.floor(Math.random() * list.length)];
                     }
-
                     let attempts = 0;
-
-                    while (
-                        /(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) &&
-                        attempts < 5
-                    ) {
-                        candidate =
-                            words[Math.floor(Math.random() * words.length)];
+                    while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
+                        candidate = words[Math.floor(Math.random() * words.length)];
                         attempts++;
                     }
-
                     return candidate;
                 };
 
                 let generated = "";
                 let current_word = pickNextWord(words);
-
                 for (let i = 0; i < 10; i++) {
-
-                    if (!current_word) {
-                        current_word = pickNextWord(words);
-                    }
-
+                    if (!current_word) current_word = pickNextWord(words);
                     generated += current_word;
-
-                    let next_candidates =
-                        markovDict[current_word] || words;
-
+                    const next_candidates = markovDict[current_word] || words;
                     current_word = pickNextWord(next_candidates);
                 }
 
                 reply_text = generated || "（言葉の断片が見つかりませんでした）";
-
             } else {
                 reply_text = "（タイムラインに材料がありません）";
             }
-        // ========================
-        // 🌡️ 佐渡島チェッカー
-        // ========================
-        } else if (user_input.includes("佐渡島チェッカー")||user_input.includes("佐渡ヶ島チェッカー")) {
+        }
 
-            console.log("佐渡島チェッカーモード起動！");
-
+        // === 佐渡島チェッカー ===
+        else if (user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) {
+            console.log("🌡️ 佐渡島チェッカーモード起動");
             await sleep(2000);
-
             reply_text = await getSadoMinTemp();
-        // ========================
-        // 🎴 おみくじ（そのまま）
-        // ========================
-        } else if (user_input.includes("おみくじ")) {
+        }
 
-            console.log("おみくじモード起動！");
-
+        // === おみくじ ===
+        else if (user_input.includes("おみくじ")) {
+            console.log("🎴 おみくじモード起動");
             const luckNum = Math.floor(Math.random() * 100);
+            let luckResult = (luckNum < 10) ? "超大吉" : (luckNum < 30) ? "大吉" : (luckNum < 60) ? "中吉" : (luckNum < 85) ? "小吉" : (luckNum < 95) ? "末吉" : "凶";
 
-            let luckResult =
-                (luckNum < 10)
-                    ? "超大吉"
-                    : (luckNum < 30)
-                    ? "大吉"
-                    : (luckNum < 60)
-                    ? "中吉"
-                    : (luckNum < 85)
-                    ? "小吉"
-                    : (luckNum < 95)
-                    ? "末吉"
-                    : "凶";
-
-            const reply_prompt = `
-${config.characterSetting}
+            const reply_prompt = `${config.characterSetting}
 【おみくじモード】
 結果は【${luckResult}】です。 
 - 運勢の結果に基づいた、あなたらしい「今日のアドバイス」や「ラッキーアイテム」を1つ含めてください。 
 - 結果(小吉など)を必ずしっかりと伝えてください。 
 - 「おみくじの結果は〜」のような形式張った説明は不要。 
 - 85文字以内で、親しみやすく、かつキャラクターの口調を崩さずに回答してください。 
-- 相手の名前を呼んでも構いません。ただし、メンションと「@」使用禁止。純粋なテキストのみを出力し、音声演出用の記号は含めないでください`
+- 相手の名前を呼んでも構いません。ただし、メンションと「@」使用禁止。純粋なテキストのみを出力し、音声演出用の記号は含めないでください`;
 
             await sleep(10000);
-            reply_text = await askGemini(reply_prompt);
-
-        // ========================
-        // 💬 通常会話
-        // ========================
-        } else {
-
-            const reply_prompt = `${config.characterSetting}
-相手の言葉: ${user_input} これに対して、80文字以内で返信してください。
- -ユーザーのことは「マスター」と呼んでください！。
- ^メンションと「@」は使用禁止。です`
-
-            await sleep(10000);
-            reply_text = await askGemini(reply_prompt);
+            reply_text = await askGemini(reply_prompt, currentKey);
         }
 
-        await mk.request('notes/create', {
-            text: reply_text.trim().slice(0, 200),
-            replyId: note.id,
-            visibility: 'home'
-        });
+        // === 通常会話 ===
+        else {
+            const reply_prompt = `${config.characterSetting}
+相手の言葉: ${user_input} これに対して、80文字以内で返信してください。
+-ユーザーのことは「マスター」と呼んでください！。
+^メンションと「@」は使用禁止。です`;
 
-        console.log(`${note.user.username} さんに返信しました。`);
+            await sleep(10000);
+            reply_text = await askGemini(reply_prompt, currentKey);
+        }
 
-        replyCount++;
+        try {
+            await mk.request('notes/create', {
+                text: reply_text.trim().slice(0, 200),
+                replyId: note.id,
+                visibility: 'home'
+            });
 
-        console.log("API制限回避のため10秒待機します...");
+            console.log(`✓ ${note.user.username}さんに返信しました`);
+            replyCount++;
+        } catch (e) {
+            console.error(`✗ 返信失敗: ${e.message}`);
+        }
+
+        console.log("⏳ API制限回避のため10秒待機します...");
         await sleep(10000);
     }
-
 }
+
 // ================================
-// 🧠 脳データ読み込み（完全安全版）
+// 🧠 脳データ読み込み
 // ================================
 async function loadBrainFromDrive(drive) {
-
-    console.log("=== MARKOV MODE DEBUG ===");
-    console.log(`GDRIVE_FILE_ID: "${process.env.GDRIVE_FILE_ID}"`);
+    console.log("📖 脳データをGoogle Driveから読み込み中...");
 
     try {
-
         const fileId = process.env.GDRIVE_FILE_ID?.trim();
 
         if (!fileId) {
-            throw new Error("環境変数 GDRIVE_FILE_ID が読み込めていません！");
+            throw new Error("環境変数 GDRIVE_FILE_ID が読み込めていません");
         }
 
-        const res = await drive.files.get(
-            { fileId, alt: 'media' },
-            { responseType: 'text' }
-        );
+        const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
 
-        console.log("RESPONSE DATA TYPE:", typeof res.data);
+        console.log("✓ RESPONSE DATA TYPE:", typeof res.data);
 
-        let rawData;
+        let rawData = typeof res.data === 'object' ? JSON.stringify(res.data) : String(res.data);
 
-        if (typeof res.data === 'object') {
-            rawData = JSON.stringify(res.data);
-        } else {
-            rawData = String(res.data);
-        }
+        console.log("✓ RESPONSE HEAD:", rawData.substring(0, 300));
 
-        console.log("RESPONSE HEAD:", rawData.substring(0, 300));
-
-        // ============================
-        // 🚨 HTML誤爆検知（最重要）
-        // ============================
+        // === HTML誤爆検知 ===
         if (rawData.trim().startsWith('<!')) {
-
             const titleMatch = rawData.match(/<title>(.*?)<\/title>/i);
-
-            console.error(
-                `🚨 Apache/GoogleからHTMLが返されました: ${
-                    titleMatch ? titleMatch[1] : 'No Title'
-                }`
-            );
-
-            console.error("HTML冒頭:", rawData.substring(0, 200));
-
+            console.error(`🚨 HTMLが返されました: ${titleMatch ? titleMatch[1] : 'No Title'}`);
             return {};
         }
 
-        // ============================
-        // 📭 空データ
-        // ============================
+        // === 空データ ===
         if (!rawData || rawData.trim() === "") {
-
-            console.log("脳のデータが空でした。新規作成します。");
-
+            console.log("✓ 脳のデータが空。新規作成します");
             return {};
         }
 
-        // ============================
-        // 🧠 JSON復元
-        // ============================
+        // === JSON復元 ===
         try {
-
-            const brain =
-                (typeof rawData === 'string')
-                    ? JSON.parse(rawData.trim())
-                    : rawData;
-
+            const brain = typeof rawData === 'string' ? JSON.parse(rawData.trim()) : rawData;
             const wordCount = Object.keys(brain).length;
-
-            console.log(`✅ 現在の脳の蓄積語数: ${wordCount}語`);
-
+            console.log(`✓ 脳の蓄積語数: ${wordCount}語`);
             return brain;
-
         } catch (pErr) {
-
             console.error("🚨 JSONパースエラー:", pErr.message);
-            console.error("受信データ冒頭:", rawData.substring(0, 100));
-
             return {};
         }
-
     } catch (e) {
-
-        console.error(`❌ Google Drive接続致命的エラー: ${e.message}`);
-
-        if (e.config) {
-            console.error("Request URL:", e.config.url);
-        }
-
+        console.error(`❌ Google Drive接続エラー: ${e.message}`);
         return {};
     }
 }
 
 // ================================
-// 🧹 脳クリーニング（元ロジック維持）
+// 🧹 脳クリーニング
 // ================================
 function cleanBrain(brain) {
-
-    console.log("既存の脳をスキャンしてゴミ掃除中...");
+    console.log("🧹 脳のクリーニング中...");
 
     Object.keys(brain).forEach(key => {
-
         const isInvalidKey =
             key.includes('\n') ||
             key.includes('\\n') ||
@@ -704,9 +536,9 @@ function cleanBrain(brain) {
             key.includes('\\u') ||
             key.includes(':') ||
             key.includes('@') ||
-            key.includes('[')||
-            key.includes(']')||
-            key.includes('$')||
+            key.includes('[') ||
+            key.includes(']') ||
+            key.includes('$') ||
             /[\uD800-\uDBFF]/.test(key) ||
             /[\uDC00-\uDFFF]/.test(key) ||
             key.includes('_') ||
@@ -715,11 +547,8 @@ function cleanBrain(brain) {
         let list = brain[key];
 
         if (Array.isArray(list)) {
-
             brain[key] = list.filter(w => {
-
                 if (typeof w !== 'string') return false;
-
                 if (
                     w.includes('\\n') ||
                     w.includes('　') ||
@@ -731,13 +560,12 @@ function cleanBrain(brain) {
                     w.includes('\\u') ||
                     w.includes(':') ||
                     w.includes('_') ||
-                    w.includes('[')||
-                    w.includes(']')||
-                    w.includes('$')||
+                    w.includes('[') ||
+                    w.includes(']') ||
+                    w.includes('$') ||
                     /[\uD800-\uDBFF]/.test(w) ||
                     /[\uDC00-\uDFFF]/.test(w)
                 ) return false;
-
                 return w.trim() !== "";
             });
         }
@@ -747,29 +575,24 @@ function cleanBrain(brain) {
         }
     });
 
-// 修正箇所：360行目付近（cleanBrain と saveBrainToDrive の間）
-    console.log("脳のクリーニング完了！");
+    console.log("✓ 脳のクリーニング完了");
     return brain;
 }
 
+// ================================
+// 🧠 脳の学習
+// ================================
 function learnBrain(brain, words) {
-    // words は形態素解析された単語の配列
     for (let i = 0; i < words.length - 1; i++) {
         const w1 = words[i];
         const w2 = words[i + 1];
 
-        // 1. 脳に w1 が登録されていなければ配列を作成
         if (!brain[w1]) {
             brain[w1] = [];
         }
 
-        // 2. ★修正ポイント：重複チェックを削除
-        // includes を外すことで、同じつながりが何度も push され、
-        // 生成時にその w2 が選ばれる確率（重み）が上がります。
         brain[w1].push(w2);
 
-        // 3. 脳が肥大化しすぎないよう、最新の100件をキープ
-        // (ここが「最近の流行り」を反映するフィルターになります)
         if (brain[w1].length > 10000) {
             brain[w1].shift();
         }
@@ -777,18 +600,23 @@ function learnBrain(brain, words) {
     return brain;
 }
 
-// 修正箇所：390行目付近（saveBrainToDrive関数の冒頭）
+// ================================
+// 💾 脳をGoogle Driveに保存
+// ================================
 async function saveBrainToDrive(drive, brain) {
     const fileId = process.env.GDRIVE_FILE_ID?.trim();
-    if (!fileId) return false;
+    if (!fileId) {
+        console.warn("⚠️ GDRIVE_FILE_ID未設定。保存スキップ");
+        return false;
+    }
 
     try {
         const payload = JSON.stringify(brain, null, 2);
         const tokenResponse = await drive.auth.getAccessToken();
         const token = tokenResponse.token || tokenResponse;
 
-        return new Promise((resolve, reject) => {            
-                const options = {
+        return new Promise((resolve, reject) => {
+            const options = {
                 hostname: 'www.googleapis.com',
                 path: `/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`,
                 method: 'PATCH',
@@ -796,7 +624,7 @@ async function saveBrainToDrive(drive, brain) {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                     'Content-Length': Buffer.byteLength(payload),
-                    'Connection': 'close' // 重要：使い回しを絶対させない
+                    'Connection': 'close'
                 }
             };
 
@@ -805,7 +633,7 @@ async function saveBrainToDrive(drive, brain) {
                 res.on('data', (chunk) => data += chunk);
                 res.on('end', () => {
                     if (res.statusCode >= 200 && res.statusCode < 300) {
-                        console.log("✅ Google Drive保存成功 (絶縁完了)");
+                        console.log("✓ Google Drive保存成功");
                         resolve(true);
                     } else {
                         console.error(`❌ Drive保存失敗: ${res.statusCode}`, data);
@@ -822,16 +650,16 @@ async function saveBrainToDrive(drive, brain) {
             req.write(payload);
             req.end();
         });
-
     } catch (e) {
         console.error("❌ 例外発生:", e.message);
         return false;
     }
 }
-//指定した地点リストの天気予報を取得し、整形された文字列を返す
-   //@param {string} mode - 'morning' (今日) か 'evening' (明日)
- //
-const locationsGroupA = {
+
+// ================================
+// 🌡️ 天気予報（一括統合版）
+// ================================
+const weatherLocations = {
     "北海道": [
         { name: "稚内市", lat: 45.41, lon: 141.67 },
         { name: "根室市", lat: 43.33, lon: 145.58 },
@@ -900,10 +728,7 @@ const locationsGroupA = {
         { name: "福井市", lat: 36.06, lon: 136.22 },
         { name: "敦賀市", lat: 35.65, lon: 136.06 },
         { name: "小浜市", lat: 35.49, lon: 135.74 }
-    ]
-};
-
-const locationsGroupB = {
+    ],
     "近畿": [
         { name: "京都市", lat: 35.01, lon: 135.76 },
         { name: "舞鶴市", lat: 35.47, lon: 135.33 },
@@ -976,8 +801,8 @@ const locationsGroupB = {
         { name: "小笠原諸島", lat: 27.09, lon: 142.19 }
     ]
 };
+
 async function generateWeatherReport(mode, locations) {
-    // 1. 全地点（AとBの両方を含むオブジェクトを想定）をフラットに展開
     const allPoints = [];
     for (const region in locations) {
         locations[region].forEach(loc => {
@@ -985,8 +810,7 @@ async function generateWeatherReport(mode, locations) {
         });
     }
 
-    // URLの長さ制限対策として分割取得は継続（ここは安定のため必須）
-    const CHUNK_SIZE = 40; 
+    const CHUNK_SIZE = 40;
     let allResults = [];
 
     for (let i = 0; i < allPoints.length; i += CHUNK_SIZE) {
@@ -996,44 +820,39 @@ async function generateWeatherReport(mode, locations) {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=weathercode,temperature_2m,precipitation_probability&timezone=Asia%2FTokyo`;
 
         try {
-            console.log(`📡 データ取得中... (${i + 1}〜${Math.min(i + CHUNK_SIZE, allPoints.length)}地点目)`);
-            const res = await fetch(url);
-            if (!res.ok) {
-                console.error(`⚠️ APIエラー: ${res.status}`);
-                allResults = allResults.concat(new Array(chunk.length).fill(null));
-                continue;
-            }
-            const data = await res.json();
-            allResults = allResults.concat(Array.isArray(data) ? data : [data]);
+            console.log(`📡 天気データ取得中... (${i + 1}〜${Math.min(i + CHUNK_SIZE, allPoints.length)}地点目)`);
+            const res = await axios.get(url);
+            allResults = allResults.concat(Array.isArray(res.data) ? res.data : [res.data]);
         } catch (e) {
-            console.error("🚨 取得失敗:", e);
+            console.error("🚨 天気データ取得失敗:", e.message);
             allResults = allResults.concat(new Array(chunk.length).fill(null));
         }
-        await new Promise(r => setTimeout(r, 300));
+        await sleep(300);
     }
 
-    // --- レポート組み立て（文字数ダイエットを徹底） ---
     let report = mode === 'morning' ? "☀️本日の広域予報\n" : "🌙明日の広域予報\n";
     const baseHour = mode === 'morning' ? 0 : 24;
     const amIdx = baseHour + 9;
     const pmIdx = baseHour + 15;
 
     const getEmoji = (c) => {
-        if (c <= 1) return "☀️"; if (c <= 3) return "⛅";
+        if (c <= 1) return "☀️";
+        if (c <= 3) return "⛅";
         if (c === 45 || c === 48) return "🌫️";
         if (c >= 51 && c <= 55) return "☔";
         if (c === 56 || c === 57 || c === 66 || c === 67) return "🧊☔";
         if (c === 61 || c === 80) return "☔";
         if (c === 63 || c === 81) return "🟨☔";
         if (c === 65 || c === 82) return "🟥☔";
-        if (c >= 71 && c <= 75) return "❄️"; if (c === 77) return "🧊";
-        if (c >= 85 && c <= 86) return "⛄"; if (c >= 95) return "⛈️";
+        if (c >= 71 && c <= 75) return "❄️";
+        if (c === 77) return "🧊";
+        if (c >= 85 && c <= 86) return "⛄";
+        if (c >= 95) return "⛈️";
         return "☁️";
     };
 
     let currentIndex = 0;
     for (const region in locations) {
-        // 地域名も短縮：【北海道】→ ●北海道
         report += `\n●${region}\n`;
         for (const loc of locations[region]) {
             const data = allResults[currentIndex];
@@ -1044,8 +863,6 @@ async function generateWeatherReport(mode, locations) {
                 const pmE = getEmoji(h.weathercode[pmIdx]);
                 const pmT = Math.round(h.temperature_2m[pmIdx]);
                 const prob = Math.max(...h.precipitation_probability.slice(baseHour, baseHour + 24));
-
-                // 極限まで詰め：℃を削除、コロンを半角に
                 report += `${loc.name}:${amE}${amT}→${pmE}${pmT}(${prob}%)\n`;
             } else {
                 report += `${loc.name}:error\n`;
@@ -1054,81 +871,52 @@ async function generateWeatherReport(mode, locations) {
         }
     }
 
-    // 最後に凡例を足す（ここも短縮）
     report += "\n【凡例】9時→15時(降水最大%)\n🟨激しい雨/🟥雷雨/🧊氷";
 
     return report;
 }
+
 // ================================
-// 🧠 マルコフ生成（進化版）
+// 🧠 マルコフ生成
 // ================================
 function generateMarkov(words, brain) {
-
-    const isSymbol = (str) =>
-        /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
+    const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
 
     const markovDict = {};
-
     for (let i = 0; i < words.length - 1; i++) {
         const w1 = words[i];
         const w2 = words[i + 1];
-
-        if (!markovDict[w1]) {
-            markovDict[w1] = [];
-        }
-
+        if (!markovDict[w1]) markovDict[w1] = [];
         markovDict[w1].push(w2);
     }
 
     const pickNextWord = (list) => {
-
         if (!list || list.length === 0) return "";
-
-        let candidate =
-            list[Math.floor(Math.random() * list.length)];
-
+        let candidate = list[Math.floor(Math.random() * list.length)];
         if (isSymbol(candidate) && Math.random() < 0.6) {
-            candidate =
-                list[Math.floor(Math.random() * list.length)];
+            candidate = list[Math.floor(Math.random() * list.length)];
         }
-
         let attempts = 0;
-
-        while (
-            /(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) &&
-            attempts < 5
-        ) {
-            candidate =
-                words[Math.floor(Math.random() * words.length)];
+        while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
+            candidate = words[Math.floor(Math.random() * words.length)];
             attempts++;
         }
-
         return candidate;
     };
 
-    const mm = Math.floor(Math.random() * (17 - 5 + 1)) + 10;
-
+    const mm = Math.floor(Math.random() * (17 - 5 + 1)) + 5;
     let generated = "";
     let current_word = pickNextWord(words);
 
     for (let i = 0; i < mm; i++) {
-
-        if (!current_word) {
-            current_word = pickNextWord(words);
-        }
+        if (!current_word) current_word = pickNextWord(words);
 
         let foundNext = "";
-
         const useBrain = Math.random() < 0.7;
 
-        if (
-            useBrain &&
-            particles.includes(current_word) &&
-            brain[current_word]
-        ) {
+        if (useBrain && particles.includes(current_word) && brain[current_word]) {
             const candidates = brain[current_word];
-            foundNext =
-                candidates[Math.floor(Math.random() * candidates.length)];
+            foundNext = candidates[Math.floor(Math.random() * candidates.length)];
         }
 
         if (!foundNext && markovDict[current_word]) {
@@ -1137,9 +925,7 @@ function generateMarkov(words, brain) {
 
         current_word = foundNext || pickNextWord(words);
 
-        if (
-            /^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)
-        ) {
+        if (/^[\u3040-\u309F]{8,}$|^[\u30A0-\u30FF]{8,}$/.test(current_word)) {
             current_word = pickNextWord(words);
             i--;
             continue;
@@ -1147,17 +933,12 @@ function generateMarkov(words, brain) {
 
         generated += current_word;
 
-        if (
-            ["。", "！", "？", "w", "…"]
-                .some(s => current_word.endsWith(s))
-        ) {
+        if (["。", "！", "？", "w", "…"].some(s => current_word.endsWith(s))) {
             break;
         }
     }
 
-    let outputText =
-        generated || "（言葉の断片が見つかりませんでした）";
-
+    let outputText = generated || "（言葉の断片が見つかりませんでした）";
     outputText = outputText
         .replace(/:.*?:/g, '')
         .replace(/[ 　]/g, '')
@@ -1170,137 +951,130 @@ function generateMarkov(words, brain) {
 }
 
 // ================================
-// 🚀 メイン処理 (完全統合版)
+// 🌐 HTTP/HTTPSリクエスト（統一版）
+// ================================
+async function requestToMisskey(domain, token, path, payload) {
+    return new Promise((resolve, reject) => {
+        const postData = JSON.stringify({ i: token, ...payload });
+        const options = {
+            hostname: domain,
+            port: 443,
+            path: `/api/${path}`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData),
+                'Connection': 'close'
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let body = '';
+            res.on('data', (chunk) => body += chunk);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    try {
+                        resolve(JSON.parse(body));
+                    } catch (e) {
+                        resolve(body);
+                    }
+                } else {
+                    reject(new Error(`API Error ${res.statusCode}: ${body.substring(0, 100)}`));
+                }
+            });
+        });
+
+        req.on('error', (e) => reject(e));
+        req.write(postData);
+        req.end();
+    });
+}
+
+// ================================
+// 🚀 メイン処理
 // ================================
 async function main() {
     try {
-        console.log("=== API Connection Check ===");
+        console.log("=== 📍 システム起動 ===");
 
-        // 1. 環境変数の取得と徹底クリーンアップ
-        const domain = (process.env.MK_DOMAIN || "").trim().replace(/^https?:\/\//, '').split('/')[0];
-        const token = (process.env.MK_TOKEN || "").trim();
+        // 1. 環境変数チェック
+        validateEnv();
 
-        if (!domain || !token) {
-            throw new Error("MK_DOMAIN または MK_TOKEN が環境変数に設定されていません。");
-        }
+        // 2. JSON.parse監視を有効化
+        enableJSONParseGuard();
 
-        // 2. 外部ライブラリに依存しない絶縁版リクエスト関数
-        const requestToMk = async (path, payload) => {
-            return new Promise((resolve, reject) => {
-                const postData = JSON.stringify({ i: token, ...payload });
-                const options = {
-                    hostname: domain,
-                    port: 443,
-                    path: `/api/${path}`,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(postData),
-                        'Connection': 'close'
-                    }
-                };
-                const req = https.request(options, (res) => {
-                    let body = '';
-                    res.on('data', (chunk) => body += chunk);
-                    res.on('end', () => {
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
-                            try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
-                        } else {
-                            reject(new Error(`API Error ${res.statusCode}: ${body.substring(0, 100)}`));
-                        }
-                    });
-                });
-                req.on('error', (e) => reject(e));
-                req.write(postData);
-                req.end();
-            });
-        };
+        // 3. APIキー選択
+        const currentKey = selectAPIKey();
 
-        // 3. ログインユーザー情報の取得
+        // 4. Misskey初期化
+        const { mk, config } = initializeMisskey();
+
+        // 5. ログインユーザー取得
         const me = await mk.request('i');
         const my_id = me.id;
-        console.log(`✅ Logged in as: @${me.username} (${my_id})`);
+        console.log(`✓ ログイン: @${me.username} (${my_id})`);
 
-        // 4. 🤝 フォロバ・リムバ処理
-        await handleFollowControl(my_id);
+        const domain = config.domain.replace(/^https?:\/\//, '').split('/')[0];
+        const token = config.token;
 
-        // 5. 💬 メンション（返信）処理
-        await handleMentions(me);
-// 1. 🕒 時間判定（日本時間）const now = new Date(new Date().toLocaleString("ja-JP", {timeZone: "Asia/Tokyo"}));
-const hour = now.getHours();
-const min = now.getMinutes();
+        // 6. フォロバ・リムバ処理
+        console.log("👤 フォロー整理を実行中...");
+        await handleFollowControl(mk, my_id);
 
-// 判定フラグ// 日本時間の現在時刻を取得
-const nowJST = new Date(new Date().toLocaleString("ja-JP", {timeZone: "Asia/Tokyo"}));
-const hourJST = nowJST.getHours();
-const minJST = nowJST.getMinutes();
+        // 7. メンション処理
+        console.log("💬 メンション処理を実行中...");
+        await handleMentions(mk, me, config, currentKey);
 
-// 判定フラグ（日本時間で指定）
-const isMorning  = (hourJST === 7  && minJST <= 15); // 日本時間 朝7:00〜7:15
-const isEvening  = (hourJST === 19 && minJST <= 15); // 日本時間 夜19:00〜19:15
-const isMidnight = (hourJST === 0  && minJST <= 15); // 日本時間 深夜0:00〜0:15
+        // 8. 時間判定（日本時間）
+        const nowJST = new Date(new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }));
+        const hourJST = nowJST.getHours();
+        const minJST = nowJST.getMinutes();
 
-console.log(`【時間チェック】日本時間: ${hourJST}:${minJST} / 判定: 朝=${isMorning}, 夜=${isEvening}, 深夜=${isMidnight}`);
+        const isMorning = (hourJST === 7 && minJST <= 15);
+        const isEvening = (hourJST === 19 && minJST <= 15);
+        const isMidnight = (hourJST === 0 && minJST <= 15);
 
-// 2. ☀️ 天気予報モードの実行（一括統合版）
-if (isMorning || isEvening || isMidnight) {
-    console.log("🌡 天気予報・一括投稿モード始動...");
+        console.log(`【時間チェック】日本時間: ${hourJST}:${minJST} | 朝=${isMorning}, 夜=${isEvening}, 深夜=${isMidnight}`);
 
-    const mode = isMorning ? 'morning' : 'evening';
-    const dayLabel = isMorning ? "本日" : "明日";
+        // 9. 天気予報投稿（該当時間のみ）
+        if (isMorning || isEvening || isMidnight) {
+            console.log("🌡️ 天気予報モード起動...");
 
-    // 凡例をさらに短縮（文字数節約）
-    const legend = 
-        "\n【凡例】9時→15時(最大降水%)\n" +
-        "🟨激雨/🟥雷雨/🧊氷";
+            const mode = isMorning ? 'morning' : 'evening';
+            const dayLabel = isMorning ? "本日" : "明日";
+            const legend = "\n【凡例】9時→15時(最大降水%)\n🟨激雨/🟥雷雨/🧊氷";
 
-    // 全地点を統合
-    const combinedLocations = { ...locationsGroupA, ...locationsGroupB };
+            const finalReport = await generateWeatherReport(mode, weatherLocations);
+            console.log(`📝 レポート作成完了（${finalReport.length}文字）`);
 
-    // データ取得
-    const finalReport = await generateWeatherReport(mode, combinedLocations);
-    
-    console.log(`📝 レポート作成完了（推定文字数: ${finalReport.length}文字）`);
+            await sleep(3000);
 
-    // サーバーの門番が落ち着くのを待ってから一気に投稿
-    console.log("⏳ 投稿前に3秒待機...");
-    await new Promise(resolve => setTimeout(resolve, 3000));
+            try {
+                await requestToMisskey(domain, token, 'notes/create', {
+                    text: finalReport + legend,
+                    cw: `${isMorning ? '☀️' : '🌙'} ${dayLabel}の全国広域予報`,
+                    visibility: "public"
+                });
+                console.log(`✓ 全国広域予報(${mode})を投稿しました`);
+            } catch (e) {
+                console.error(`❌ 天気予報投稿失敗: ${e.message}`);
+            }
 
-    try {
-        await requestToMk('notes/create', {
-            text: finalReport + legend,
-            cw: `${isMorning ? '☀️' : '🌙'} ${dayLabel}の全国広域予報`,
-            visibility: "public"
-        });
-        console.log(`✅ 全国広域予報(${mode})を一括投稿しました。`);
-    } catch (e) {
-        console.error("🚨 投稿に失敗しました。文字数制限またはサーバーエラーの可能性があります。");
-        throw e; // エラーを投げてログに残す
-    }
+            await sleep(4000);
+        }
 
-    // マルコフ連鎖への移行待機
-    console.log("⏳ 4秒待機してマルコフ連鎖を開始します...");
-    await new Promise(resolve => setTimeout(resolve, 4000));
-}
-        // 3. 🧠 通常の学習＆マルコフ連鎖フェーズ
-        console.log("📖 タイムラインを取得して学習を開始します...");
-            
-        // 6. 📝 定期投稿の準備
-        console.log("定期投稿の準備を開始します...");
+        // 10. 脳データの学習フェーズ
+        console.log("📖 学習フェーズ開始...");
         await sleep(2000);
 
-        // Google Drive から脳データをロード
+        // Google Drive認証
         const drive = await getDriveAuth();
         let brain = await loadBrainFromDrive(drive);
-        
-        // 脳のクリーニング
         brain = cleanBrain(brain);
 
-        // 7. 📥 タイムライン取得 (絶縁版)
-        console.log("👉 タイムラインを取得します...");
-        const tlRaw = await requestToMk('notes/hybrid-timeline', { limit: 84 });
-        
-        // 配列であることを保証
+        // タイムライン取得
+        console.log("📥 タイムライン取得中...");
+        const tlRaw = await requestToMisskey(domain, token, 'notes/hybrid-timeline', { limit: 84 });
         const tl = Array.isArray(tlRaw) ? tlRaw : (tlRaw?.notes || []);
 
         const tl_text = tl
@@ -1312,66 +1086,59 @@ if (isMorning || isEvening || isMidnight) {
         const words = segmenter.segment(tl_text);
         console.log(`【分析実行】総単語数: ${words.length}`);
 
-        // 8. 📚 学習 & Google Driveへ保存
-        brain = learnBrain(brain, words, tl_text);
+        // 学習 & 保存
+        brain = learnBrain(brain, words);
         await saveBrainToDrive(drive, brain);
-        console.log("✅ 脳の更新とDriveへの保存が完了しました");
-        // ★追加：蓄積された総単語数をカウント
-        // 修正後のログ出力イメージ
-const vocabularyCount = Object.keys(brain).length; // 単語の種類
-const connectionCount = Object.values(brain).reduce((acc, curr) => acc + curr.length, 0); // つながりの総数
 
-console.log(`✅ 脳の更新が完了しました！`);
-console.log(`📊 語彙数(単語の種類): ${vocabularyCount}`);
-console.log(`⚖️ 総重み数(経験値): ${connectionCount}`); // ←ここが重要！
-        // 9. 🧠 マルコフ連鎖による文章生成
+        const vocabularyCount = Object.keys(brain).length;
+        const connectionCount = Object.values(brain).reduce((acc, curr) => acc + curr.length, 0);
+
+        console.log(`✓ 脳の更新完了！`);
+        console.log(`📊 語彙数: ${vocabularyCount}`);
+        console.log(`⚖️ 総重み数: ${connectionCount}`);
+
+        // 11. マルコフ連鎖生成
         let outputText = generateMarkov(words, brain);
 
-        // ========================
-        // 🧠 生成（マルコフ再試行ロジック復元）
-        // =======================
         let retryCount = 0;
-
-        // 納得のいく長さになるまで最大5回再生成
         while ((!outputText || outputText.length < 4) && retryCount < 5) {
-            if (retryCount > 0) console.log(`再生成試行中... (${retryCount}回目)`);
+            if (retryCount > 0) console.log(`🔄 再生成試行中... (${retryCount}回目)`);
             outputText = generateMarkov(words, brain);
             retryCount++;
         }
-        // ★【手動実行タグの復元】
-        // 環境変数（GITHUB_ACTIONS等）や引数から手動実行かどうかを判定
+
+        // 手動実行タグ付与
         const isManual = process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' || !process.env.GITHUB_ACTIONS;
         if (isManual) {
             outputText = `【手動実行】\n${outputText}`;
-            console.log("手動実行を検知したためタグを付与しました。");
+            console.log("✓ 手動実行を検知。タグを付与しました");
         }
-        // 10. 📤 Misskeyへ最終投稿 (絶縁版)
-        console.log("👉 Misskeyに最終投稿します...");
+
+        // 12. 最終投稿
+        console.log("📤 Misskeyに投稿中...");
         try {
-            const resData = await requestToMk('notes/create', {
+            const resData = await requestToMisskey(domain, token, 'notes/create', {
                 text: outputText.trim().slice(0, 110),
                 visibility: 'home'
             });
-            console.log("✅ 投稿成功！ Note ID:", resData.createdNote?.id || "N/A");
+            console.log(`✓ 投稿成功！ Note ID: ${resData.createdNote?.id || "N/A"}`);
         } catch (err) {
-            console.error("━━━━━━━━━━━━━ 🚨 投稿失敗 🚨 ━━━━━━━━━━━━━");
-            console.error(`原因: ${err.message}`);
+            console.error(`❌ 投稿失敗: ${err.message}`);
         }
 
-        console.log("全工程が正常に完了しました！内容: " + outputText);
+        console.log(`\n✓✓✓ 全工程完了 ✓✓✓`);
+        console.log(`内容: ${outputText}`);
 
     } catch (e) {
-        console.error(`致命的なエラーが発生しました: ${e.message}`);
-        try {
-            // エラーをコンソールに出すだけで投稿はしない（ループ防止）
-            console.log(`[System Log] 実行停止: ${e.message}`);
-        } catch (logErr) {}
+        console.error(`\n❌ 致命的エラー: ${e.message}`);
+        console.error(e.stack);
     }
 }
 
 // ================================
-// ▶ 実行開始
+// ▶️ 実行開始
 // ================================
 main().catch(err => {
-    console.error("Top-level Catch:", err);
+    console.error("🚨 Top-level Catch:", err);
+    process.exit(1);
 });
