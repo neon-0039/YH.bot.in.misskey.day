@@ -225,19 +225,44 @@ async function askGemini(prompt, currentKey) {
     const getRandomError = () =>
         errorMessages[Math.floor(Math.random() * errorMessages.length)];
 
+    // キーのバリデーション
+    if (!currentKey || currentKey.length < 10) {
+        console.error("🚨 無効なAPIキーです");
+        return getRandomError();
+    }
+
     for (const modelId of modelPriority) {
-        const url = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${currentKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${currentKey}`;
 
         try {
             console.log(`📡 モデル試行中: ${modelId}`);
+            console.log(`🔑 キー長: ${currentKey.length}, URL長: ${url.length}`);
 
-            const res = await axios.post(url, {
-                contents: [{
-                    role: "user",
-                    parts: [{ text: prompt }]
-                }]
-            }, {
-                headers: { "Content-Type": "application/json" }
+            // リクエストボディを正確に構築
+            const requestBody = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            {
+                                text: prompt
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    maxOutputTokens: 100,
+                    temperature: 0.9
+                }
+            };
+
+            console.log(`📤 リクエスト送信: ${JSON.stringify(requestBody).substring(0, 100)}...`);
+
+            const res = await axios.post(url, requestBody, {
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                timeout: 15000
             });
 
             const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -247,29 +272,44 @@ async function askGemini(prompt, currentKey) {
                 continue;
             }
 
+            console.log(`✓ Gemini返信取得: ${text.substring(0, 50)}...`);
             return text;
+
         } catch (error) {
             const status = error.response?.status;
             const data = error.response?.data;
+            const errorMsg = error.message;
 
+            console.error(`❌ エラー詳細:`);
+            console.error(`   ステータス: ${status}`);
+            console.error(`   メッセージ: ${errorMsg}`);
+
+            // HTMLレスポンス検知
             if (typeof data === "string" && data.startsWith("<!")) {
                 console.warn("⚠️ HTMLレスポンス検知 → 次のモデルへ");
+                console.warn(`   HTML: ${data.substring(0, 200)}`);
                 continue;
             }
 
-            if ([400, 404, 429].includes(status)) {
-                console.warn(`⚠️ ${modelId} スキップ (${status})`);
+            // JSON形式のエラーレスポンス
+            if (data?.error?.message) {
+                console.warn(`⚠️ API エラー: ${data.error.message}`);
+            }
+
+            // 一時的なエラーはスキップして次へ
+            if ([400, 403, 429, 500, 503].includes(status)) {
+                console.warn(`⚠️ ${modelId} スキップ (HTTP ${status})`);
+                await sleep(2000); // リトライ前に待機
                 continue;
             }
 
-            console.error(`❌ 致命的エラー (${modelId}):`, error.message);
-            return getRandomError();
+            console.error(`❌ 致命的エラー (${modelId}):`, errorMsg);
         }
     }
 
+    console.error("🚨 全モデルが失敗しました");
     return getRandomError();
 }
-
 // ================================
 // 🤝 フォロバ & リムバ
 // ================================
@@ -469,7 +509,7 @@ async function handleMentions(mk, me, config, currentKey) {
 }
 
 // ================================
-// ✉️ DM処理
+// ✉️ DM処理（修正版）
 // ================================
 async function handleDirectMessages(mk, me, config, currentKey) {
     console.log("📨 DM確認中...");
@@ -480,19 +520,26 @@ async function handleDirectMessages(mk, me, config, currentKey) {
             includeTypes: ['mention']
         });
 
+        if (!Array.isArray(notifications) || notifications.length === 0) {
+            console.log("✓ 新しいDMはありません");
+            return;
+        }
+
+        let dmCount = 0;
+
         for (const n of notifications) {
             if (!n || !n.note) continue;
 
             const note = n.note;
 
-            // DMのみ（visibilityが'specified'＝DM）
+            // DMのみ（visibility: 'specified'）
             if (note.visibility !== 'specified') continue;
 
             // 自分除外
-            if (note.user.id === me.id) continue;
+            if (note.user?.id === me.id) continue;
 
             // Bot除外
-            if (note.user.isBot) continue;
+            if (note.user?.isBot) continue;
 
             // 既返信除外
             if (note.myReplyId) continue;
@@ -503,60 +550,71 @@ async function handleDirectMessages(mk, me, config, currentKey) {
 
             if (!user_input) continue;
 
-            console.log(`✉️ DM受信: ${note.user.username} - "${user_input}"`);
-
-            const history = await buildConversationContext(mk, note, me);
-            console.log(`📖 会話履歴取得: ${history.length}件`);
-
-            const prompt = conversationToPrompt(
-                history,
-                config.characterSetting
-            );
-
-            await sleep(3000);
-            const reply = await askGemini(prompt, currentKey);
+            console.log(`✉️ DM受信: ${note.user.username} - "${user_input.substring(0, 30)}..."`);
 
             try {
-                await mk.request('notes/create', {
-                    text: reply.trim().slice(0, 200),
-                    replyId: note.id,
-                    visibility: 'specified',
-                    visibleUserIds: [note.user.id]
-                });
+                // 会話履歴取得
+                const history = await buildConversationContext(mk, note, me);
+                console.log(`📜 会話履歴: ${history.length}件取得`);
 
-                console.log(`✓ DM返信成功: ${note.user.username}`);
+                // プロンプト構築
+                const prompt = conversationToPrompt(history, config.characterSetting);
+
+                // Gemini呼び出し
+                const reply = await askGemini(prompt, currentKey);
+
+                // 返信投稿
+                try {
+                    await mk.request('notes/create', {
+                        text: reply.trim().slice(0, 200),
+                        replyId: note.id,
+                        visibility: 'specified',
+                        visibleUserIds: [note.user.id]
+                    });
+
+                    console.log(`✓ DM返信成功: ${note.user.username}`);
+                    dmCount++;
+                } catch (e) {
+                    console.error(`❌ DM返信失敗: ${e.message}`);
+                }
+
             } catch (e) {
-                console.error("❌ DM返信失敗:", e.message);
+                console.error(`⚠️ DM処理エラー (${note.user.username}): ${e.message}`);
             }
 
+            // API制限対策
             await sleep(5000);
         }
+
+        console.log(`📊 DM処理完了: ${dmCount}件返信`);
+
     } catch (e) {
-        console.error("⚠️ DM処理でエラー（続行します）:", e.message);
+        console.error("⚠️ DM確認処理でエラー（続行します）:", e.message);
     }
 }
 
 // ================================
-// 🧵 会話履歴取得
+// 🧵 会話履歴取得（修正版）
 // ================================
 async function buildConversationContext(mk, note, me) {
     const history = [];
 
     let current = note;
     let depth = 0;
-    const MAX_DEPTH = 4;
+    const MAX_DEPTH = 2;
 
     while (current && depth < MAX_DEPTH) {
         const userName = current.user?.username || "unknown";
         const text = (current.text || "")
             .replace(`@${me.username}`, '')
+            .replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '') // URL削除
             .trim();
 
         if (text) {
             history.unshift({
-                role: current.user.id === me.id ? "assistant" : "user",
+                role: current.user?.id === me.id ? "assistant" : "user",
                 name: userName,
-                text
+                text: text.slice(0, 100) // 過度に長いテキストを制限
             });
         }
 
@@ -567,7 +625,7 @@ async function buildConversationContext(mk, note, me) {
                 noteId: current.replyId
             });
         } catch (e) {
-            console.warn("⚠️ 会話履歴取得失敗:", e.message);
+            console.warn(`⚠️ 会話履歴取得失敗 (depth=${depth}): ${e.message}`);
             break;
         }
 
