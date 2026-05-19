@@ -544,7 +544,7 @@ async function buildConversationContext(mk, note, me) {
 
     let current = note;
     let depth = 0;
-    const MAX_DEPTH = 6;
+    const MAX_DEPTH = 4;
 
     while (current && depth < MAX_DEPTH) {
         const userName = current.user?.username || "unknown";
