@@ -469,6 +469,141 @@ async function handleMentions(mk, me, config, currentKey) {
 }
 
 // ================================
+// ✉️ DM処理
+// ================================
+async function handleDirectMessages(mk, me, config, currentKey) {
+    console.log("📨 DM確認中...");
+
+    try {
+        const notifications = await mk.request('i/notifications', {
+            limit: 20,
+            includeTypes: ['mention']
+        });
+
+        for (const n of notifications) {
+            if (!n || !n.note) continue;
+
+            const note = n.note;
+
+            // DMのみ（visibilityが'specified'＝DM）
+            if (note.visibility !== 'specified') continue;
+
+            // 自分除外
+            if (note.user.id === me.id) continue;
+
+            // Bot除外
+            if (note.user.isBot) continue;
+
+            // 既返信除外
+            if (note.myReplyId) continue;
+
+            const user_input = (note.text || "")
+                .replace(`@${me.username}`, '')
+                .trim();
+
+            if (!user_input) continue;
+
+            console.log(`✉️ DM受信: ${note.user.username} - "${user_input}"`);
+
+            const history = await buildConversationContext(mk, note, me);
+            console.log(`📖 会話履歴取得: ${history.length}件`);
+
+            const prompt = conversationToPrompt(
+                history,
+                config.characterSetting
+            );
+
+            await sleep(3000);
+            const reply = await askGemini(prompt, currentKey);
+
+            try {
+                await mk.request('notes/create', {
+                    text: reply.trim().slice(0, 200),
+                    replyId: note.id,
+                    visibility: 'specified',
+                    visibleUserIds: [note.user.id]
+                });
+
+                console.log(`✓ DM返信成功: ${note.user.username}`);
+            } catch (e) {
+                console.error("❌ DM返信失敗:", e.message);
+            }
+
+            await sleep(5000);
+        }
+    } catch (e) {
+        console.error("⚠️ DM処理でエラー（続行します）:", e.message);
+    }
+}
+
+// ================================
+// 🧵 会話履歴取得
+// ================================
+async function buildConversationContext(mk, note, me) {
+    const history = [];
+
+    let current = note;
+    let depth = 0;
+    const MAX_DEPTH = 6;
+
+    while (current && depth < MAX_DEPTH) {
+        const userName = current.user?.username || "unknown";
+        const text = (current.text || "")
+            .replace(`@${me.username}`, '')
+            .trim();
+
+        if (text) {
+            history.unshift({
+                role: current.user.id === me.id ? "assistant" : "user",
+                name: userName,
+                text
+            });
+        }
+
+        if (!current.replyId) break;
+
+        try {
+            current = await mk.request('notes/show', {
+                noteId: current.replyId
+            });
+        } catch (e) {
+            console.warn("⚠️ 会話履歴取得失敗:", e.message);
+            break;
+        }
+
+        depth++;
+        await sleep(300);
+    }
+
+    return history;
+}
+
+// ================================
+// 🧠 会話履歴 → プロンプト変換
+// ================================
+function conversationToPrompt(history, characterSetting) {
+    let prompt = `${characterSetting}\n`;
+    prompt += `${config.characterSetting}　以下は会話履歴です。\n\n`;
+
+    for (const msg of history) {
+        if (msg.role === "assistant") {
+            prompt += `あなた: ${msg.text}\n`;
+        } else {
+            prompt += `${msg.name}さん: ${msg.text}\n`;
+        }
+    }
+
+    prompt += `\n上の流れを踏まえて自然に返信してください。
+- 80文字以内
+- 必ず丁寧語で、ですます調
+- 「@」禁止、メンション禁止
+- 会話の流れをちゃんと踏まえること
+- 相手の名前を呼んでも構いません`;
+
+    return prompt;
+}
+
+// ================================
 // 🧠 脳データ読み込み
 // ================================
 async function loadBrainFromDrive(drive) {
@@ -1027,11 +1162,15 @@ async function main() {
         console.log("👤 フォロー整理を実行中...");
         await handleFollowControl(mk, my_id);
 
-        // 7. メンション処理
+        // 7. DM処理（メンション前に実行）
+        console.log("📨 DM処理を実行中...");
+        await handleDirectMessages(mk, me, config, currentKey);
+
+        // 8. メンション処理
         console.log("💬 メンション処理を実行中...");
         await handleMentions(mk, me, config, currentKey);
 
-        // 8. 時間判定（日本時間）
+        // 9. 時間判定（日本時間）
         const nowJST = new Date(new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }));
         const hourJST = nowJST.getHours();
         const minJST = nowJST.getMinutes();
@@ -1042,7 +1181,7 @@ async function main() {
 
         console.log(`【時間チェック】日本時間: ${hourJST}:${minJST} | 朝=${isMorning}, 夜=${isEvening}, 深夜=${isMidnight}`);
 
-        // 9. 天気予報投稿（該当時間のみ）
+        // 10. 天気予報投稿（該当時間のみ）
         if (isMorning || isEvening || isMidnight) {
             console.log("🌡️ 天気予報モード起動...");
 
@@ -1069,7 +1208,7 @@ async function main() {
             await sleep(4000);
         }
 
-        // 10. 脳データの学習フェーズ
+        // 11. 脳データの学習フェーズ
         console.log("📖 学習フェーズ開始...");
         await sleep(2000);
 
@@ -1103,7 +1242,7 @@ async function main() {
         console.log(`📊 語彙数: ${vocabularyCount}`);
         console.log(`⚖️ 総重み数: ${connectionCount}`);
 
-        // 11. マルコフ連鎖生成
+        // 12. マルコフ連鎖生成
         let outputText = generateMarkov(words, brain);
 
         let retryCount = 0;
@@ -1120,7 +1259,7 @@ async function main() {
             console.log("✓ 手動実行を検知。タグを付与しました");
         }
 
-        // 12. 最終投稿
+        // 13. 最終投稿
         console.log("📤 Misskeyに投稿中...");
         try {
             const resData = await requestToMisskey(domain, token, 'notes/create', {
