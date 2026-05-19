@@ -542,6 +542,9 @@ function cleanBrain(brain) {
             /[\uD800-\uDBFF]/.test(key) ||
             /[\uDC00-\uDFFF]/.test(key) ||
             key.includes('_') ||
+            key.includes('>')||
+            key.includes('Shi')||
+            key.includes('/')||
             /:.*:/.test(key);
 
         let list = brain[key];
@@ -563,6 +566,9 @@ function cleanBrain(brain) {
                     w.includes('[') ||
                     w.includes(']') ||
                     w.includes('$') ||
+                    w.includes('>')||
+                    w.includes('Shi')||
+                    w.includes('/')||
                     /[\uD800-\uDBFF]/.test(w) ||
                     /[\uDC00-\uDFFF]/.test(w)
                 ) return false;
