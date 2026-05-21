@@ -369,104 +369,116 @@ async function handleMentions(mk, me, config, currentKey) {
     for (const note of mentions) {
         if (replyCount >= 6) break;
 
-        if (note.user.isBot || note.user.id === me.id || note.myReplyId || (note.repliesCount && note.repliesCount > 0)) {
-            continue;
-        }
-
-        let user_input = (note.text || "")
-            .replace(`@${me.username}`, "")
-            .trim();
-
-        if (!user_input) continue;
-
-        console.log(`💬 ${note.user.username}さんからのメンションを処理中...`);
-
-        let reply_text = "";
-
-        // === リアクション処理 ===
-        if (user_input.includes("おみくじ") || user_input.includes("マルコフ") || user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) {
-            try {
-                let reactionEmoji = ":mk_hi:";
-                if (user_input.includes("おみくじ")) reactionEmoji = ":Shiropuyo_good:";
-                else if (user_input.includes("マルコフ")) reactionEmoji = ":Shiropuyo_galaxy:";
-                else if (user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) reactionEmoji = ":blobcatpnd_ryo:";
-
-                await mk.request('notes/reactions/create', {
-                    noteId: note.id,
-                    reaction: reactionEmoji
-                });
-            } catch (reacErr) {
-                console.error("⚠️ リアクション失敗:", reacErr.message);
+        try {  // ← 外側のtry-catchを追加
+            if (note.user.isBot || note.user.id === me.id || note.myReplyId || (note.repliesCount && note.repliesCount > 0)) {
+                continue;
             }
-        }
 
-        // === マルコフ ===
-        if (user_input.includes("マルコフ")) {
-            console.log("🧠 マルコフ連鎖モード起動");
-            const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
+            let user_input = (note.text || "")
+                .replace(`@${me.username}`, "")
+                .trim();
 
-            const tl_text = tl
-                .filter(n => n.text && n.user.id !== me.id)
-                .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
-                .slice(0, 64)
-                .join(" ");
+            if (!user_input) continue;
 
-            const regex = /[\u4E00-\u9FFF]+|[\u3040-\u309F]+|[\u30A0-\u30FF]+|[\uFF65-\uFF9F]+|[a-zA-Z0-9]+|[^\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F\sa-zA-Z0-9]+/g;
-            const words = tl_text.match(regex) || [];
+            console.log(`💬 ${note.user.username}さんからのメンションを処理中...`);
 
-            if (words.length > 0) {
-                const markovDict = {};
-                for (let i = 0; i < words.length - 1; i++) {
-                    const w1 = words[i];
-                    const w2 = words[i + 1];
-                    if (!markovDict[w1]) markovDict[w1] = [];
-                    markovDict[w1].push(w2);
+            let reply_text = "";
+
+            // === リアクション処理 ===
+            if (user_input.includes("おみくじ") || user_input.includes("マルコフ") || user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) {
+                try {
+                    let reactionEmoji = ":mk_hi:";
+                    if (user_input.includes("おみくじ")) reactionEmoji = ":Shiropuyo_good:";
+                    else if (user_input.includes("マルコフ")) reactionEmoji = ":Shiropuyo_galaxy:";
+                    else if (user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) reactionEmoji = ":blobcatpnd_ryo:";
+
+                    await mk.request('notes/reactions/create', {
+                        noteId: note.id,
+                        reaction: reactionEmoji
+                    });
+                } catch (reacErr) {
+                    console.error("⚠️ リアクション失敗:", reacErr.message);
+                    // リアクション失敗時も処理を継続
                 }
-
-                const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
-                const pickNextWord = (list) => {
-                    if (!list || list.length === 0) return "";
-                    let candidate = list[Math.floor(Math.random() * list.length)];
-                    if (isSymbol(candidate) && Math.random() < 0.6) {
-                        candidate = list[Math.floor(Math.random() * list.length)];
-                    }
-                    let attempts = 0;
-                    while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
-                        candidate = words[Math.floor(Math.random() * words.length)];
-                        attempts++;
-                    }
-                    return candidate;
-                };
-
-                let generated = "";
-                let current_word = pickNextWord(words);
-                for (let i = 0; i < 10; i++) {
-                    if (!current_word) current_word = pickNextWord(words);
-                    generated += current_word;
-                    const next_candidates = markovDict[current_word] || words;
-                    current_word = pickNextWord(next_candidates);
-                }
-
-                reply_text = generated || "（言葉の断片が見つかりませんでした）";
-            } else {
-                reply_text = "（タイムラインに材料がありません）";
             }
-        }
 
-        // === 佐渡島チェッカー ===
-        else if (user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) {
-            console.log("🌡️ 佐渡島チェッカーモード起動");
-            await sleep(2000);
-            reply_text = await getSadoMinTemp();
-        }
+            // === マルコフ ===
+            if (user_input.includes("マルコフ")) {
+                console.log("🧠 マルコフ連鎖モード起動");
+                try {
+                    const tl = await mk.request('notes/hybrid-timeline', { limit: 72 });
+                    const tl_text = tl
+                        .filter(n => n.text && n.user.id !== me.id)
+                        .map(n => n.text.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '').trim())
+                        .slice(0, 64)
+                        .join(" ");
 
-        // === おみくじ ===
-        else if (user_input.includes("おみくじ")) {
-            console.log("🎴 おみくじモード起動");
-            const luckNum = Math.floor(Math.random() * 100);
-            let luckResult = (luckNum < 10) ? "超大吉" : (luckNum < 30) ? "大吉" : (luckNum < 60) ? "中吉" : (luckNum < 85) ? "小吉" : (luckNum < 95) ? "末吉" : "凶";
+                    const regex = /[\u4E00-\u9FFF]+|[\u3040-\u309F]+|[\u30A0-\u30FF]+|[\uFF65-\uFF9F]+|[a-zA-Z0-9]+|[^\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F\sa-zA-Z0-9]+/g;
+                    const words = tl_text.match(regex) || [];
 
-            const reply_prompt = `${config.characterSetting}
+                    if (words.length > 0) {
+                        const markovDict = {};
+                        for (let i = 0; i < words.length - 1; i++) {
+                            const w1 = words[i];
+                            const w2 = words[i + 1];
+                            if (!markovDict[w1]) markovDict[w1] = [];
+                            markovDict[w1].push(w2);
+                        }
+
+                        const isSymbol = (str) => /^[^a-zA-Z0-9\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F]+$/.test(str);
+                        const pickNextWord = (list) => {
+                            if (!list || list.length === 0) return "";
+                            let candidate = list[Math.floor(Math.random() * list.length)];
+                            if (isSymbol(candidate) && Math.random() < 0.6) {
+                                candidate = list[Math.floor(Math.random() * list.length)];
+                            }
+                            let attempts = 0;
+                            while (/(マルコフ|おみくじ|タイムライン|@|#)/.test(candidate) && attempts < 5) {
+                                candidate = words[Math.floor(Math.random() * words.length)];
+                                attempts++;
+                            }
+                            return candidate;
+                        };
+
+                        let generated = "";
+                        let current_word = pickNextWord(words);
+                        for (let i = 0; i < 10; i++) {
+                            if (!current_word) current_word = pickNextWord(words);
+                            generated += current_word;
+                            const next_candidates = markovDict[current_word] || words;
+                            current_word = pickNextWord(next_candidates);
+                        }
+
+                        reply_text = generated || "（言葉の断片が見つかりませんでした）";
+                    } else {
+                        reply_text = "（タイムラインに材料がありません）";
+                    }
+                } catch (markovErr) {
+                    console.error("⚠️ マルコフ処理失敗:", markovErr.message);
+                    reply_text = "（マルコフ処理でエラーが発生しました）";
+                }
+            }
+
+            // === 佐渡島チェッカー ===
+            else if (user_input.includes("佐渡島チェッカー") || user_input.includes("佐渡ヶ島チェッカー")) {
+                console.log("🌡️ 佐渡島チェッカーモード起動");
+                try {
+                    await sleep(2000);
+                    reply_text = await getSadoMinTemp();
+                } catch (sadoErr) {
+                    console.error("⚠️ 佐渡島チェッカー失敗:", sadoErr.message);
+                    reply_text = "（佐渡島チェッカー処理でエラーが発生しました）";
+                }
+            }
+
+            // === おみくじ ===
+            else if (user_input.includes("おみくじ")) {
+                console.log("🎴 おみくじモード起動");
+                try {
+                    const luckNum = Math.floor(Math.random() * 100);
+                    let luckResult = (luckNum < 10) ? "超大吉" : (luckNum < 30) ? "大吉" : (luckNum < 60) ? "中吉" : (luckNum < 85) ? "小吉" : (luckNum < 95) ? "末吉" : "凶";
+
+                    const reply_prompt = `${config.characterSetting}
 【おみくじモード】
 結果は【${luckResult}】です。 
 - 運勢の結果に基づいた、あなたらしい「今日のアドバイス」や「ラッキーアイテム」を1つ含めてください。 
@@ -475,39 +487,55 @@ async function handleMentions(mk, me, config, currentKey) {
 - 85文字以内で、親しみやすく、かつキャラクターの口調を崩さずに回答してください。 
 - 相手の名前を呼んでも構いません。ただし、メンションと「@」使用禁止。純粋なテキストのみを出力し、音声演出用の記号は含めないでください`;
 
-            await sleep(10000);
-            reply_text = await askGemini(reply_prompt, currentKey);
-        }
+                    await sleep(10000);
+                    reply_text = await askGemini(reply_prompt, currentKey);
+                } catch (omikujiErr) {
+                    console.error("⚠️ おみくじ処理失敗:", omikujiErr.message);
+                    reply_text = "（おみくじ処理でエラーが発生しました）";
+                }
+            }
 
-        // === 通常会話 ===
-        else {
-            const reply_prompt = `${config.characterSetting}
+            // === 通常会話 ===
+            else {
+                try {
+                    const reply_prompt = `${config.characterSetting}
 相手の言葉: ${user_input} これに対して、80文字以内で返信してください。
 -ユーザーのことは「マスター」と呼んでください！。
 ^メンションと「@」は使用禁止。です`;
 
+                    await sleep(10000);
+                    reply_text = await askGemini(reply_prompt, currentKey);
+                } catch (normalErr) {
+                    console.error("⚠️ 通常会話処理失敗:", normalErr.message);
+                    reply_text = "（返信処理でエラーが発生しました）";
+                }
+            }
+
+            // === 返信送信 ===
+            try {
+                await mk.request('notes/create', {
+                    text: reply_text.trim().slice(0, 200),
+                    replyId: note.id,
+                    visibility: 'home'
+                });
+
+                console.log(`✓ ${note.user.username}さんに返信しました`);
+                replyCount++;
+            } catch (e) {
+                console.error(`✗ 返信失敗: ${e.message}`);
+            }
+
+            console.log("⏳ API制限回避のため10秒待機します...");
             await sleep(10000);
-            reply_text = await askGemini(reply_prompt, currentKey);
+
+        } catch (outerErr) {
+            // 予期しないエラーをキャッチして処理を継続
+            console.error(`⚠️ メンション処理で予期しないエラー (${note.user?.username || 'unknown'})`, outerErr.message);
+            console.log("⏳ 次のメンション処理に進みます...");
+            await sleep(5000);
         }
-
-        try {
-            await mk.request('notes/create', {
-                text: reply_text.trim().slice(0, 200),
-                replyId: note.id,
-                visibility: 'home'
-            });
-
-            console.log(`✓ ${note.user.username}さんに返信しました`);
-            replyCount++;
-        } catch (e) {
-            console.error(`✗ 返信失敗: ${e.message}`);
-        }
-
-        console.log("⏳ API制限回避のため10秒待機します...");
-        await sleep(10000);
     }
 }
-
 // ================================
 // ✉️ DM処理（修正版）
 // ================================
