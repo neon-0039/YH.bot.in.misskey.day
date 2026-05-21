@@ -1273,7 +1273,6 @@ async function main() {
 
             const mode = isMorning ? 'morning' : 'evening';
             const dayLabel = isMorning ? "本日" : "明日";
-            const legend = "\n【凡例】9時→15時(最大降水%)\n🟨激雨/🟥雷雨/🧊氷";
 
             const finalReport = await generateWeatherReport(mode, weatherLocations);
             console.log(`📝 レポート作成完了（${finalReport.length}文字）`);
