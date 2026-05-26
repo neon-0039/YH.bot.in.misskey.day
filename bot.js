@@ -582,14 +582,14 @@ async function handleDirectMessages(mk, me, config, currentKey) {
 
             try {
                 // 会話履歴取得
-                const history = await buildConversationContext(mk, note, me);
-                console.log(`📜 会話履歴: ${history.length}件取得`);
+                //const history = await buildConversationContext(mk, note, me);
+                //console.log(`📜 会話履歴: ${history.length}件取得`);
 
                 // プロンプト構築
-                const prompt = conversationToPrompt(history, config.characterSetting);
+                //const prompt = conversationToPrompt(history, config.characterSetting);
 
                 // Gemini呼び出し
-                const reply = await askGemini(prompt, currentKey);
+                //const reply = await askGemini(prompt, currentKey);
 
                 // 返信投稿
                 try {
@@ -627,39 +627,39 @@ async function handleDirectMessages(mk, me, config, currentKey) {
 async function buildConversationContext(mk, note, me) {
     const history = [];
 
-    let current = note;
-    let depth = 0;
-    const MAX_DEPTH = 2;
+    //let current = note;
+    //let depth = 0;
+    //const MAX_DEPTH = 2;
 
-    while (current && depth < MAX_DEPTH) {
-        const userName = current.user?.username || "unknown";
-        const text = (current.text || "")
-            .replace(`@${me.username}`, '')
-            .replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '') // URL削除
-            .trim();
+    //while (current && depth < MAX_DEPTH) {
+        //const userName = current.user?.username || "unknown";
+        //const text = (current.text || "")
+            //.replace(`@${me.username}`, '')
+            //.replace(/https?:\/\/[\w/:%#\$&\?\(\)~\.=\+\-]+/g, '') // URL削除
+            //.trim();
 
-        if (text) {
-            history.unshift({
-                role: current.user?.id === me.id ? "assistant" : "user",
-                name: userName,
-                text: text.slice(0, 100) // 過度に長いテキストを制限
-            });
-        }
+        //if (text) {
+            //history.unshift({
+                //role: current.user?.id === me.id ? "assistant" : "user",
+                //name: userName,
+                //text: text.slice(0, 100) // 過度に長いテキストを制限
+            //});
+        //}
 
-        if (!current.replyId) break;
+        //if (!current.replyId) break;
 
-        try {
-            current = await mk.request('notes/show', {
-                noteId: current.replyId
-            });
-        } catch (e) {
-            console.warn(`⚠️ 会話履歴取得失敗 (depth=${depth}): ${e.message}`);
-            break;
-        }
+        //try {
+            //current = await mk.request('notes/show', {
+                //noteId: current.replyId
+            //});
+        //} catch (e) {
+            //console.warn(`⚠️ 会話履歴取得失敗 (depth=${depth}): ${e.message}`);
+            //break;
+        //}
 
-        depth++;
-        await sleep(300);
-    }
+        //depth++;
+        //await sleep(300);
+    //}
 
     return history;
 }
@@ -668,24 +668,24 @@ async function buildConversationContext(mk, note, me) {
 // 🧠 会話履歴 → プロンプト変換
 // ================================
 function conversationToPrompt(history, characterSetting) {
-    let prompt = `${characterSetting}\n`;
-    prompt += `${config.characterSetting}　以下は会話履歴です。\n\n`;
+    //let prompt = `${characterSetting}\n`;
+    //prompt += `${config.characterSetting}　以下は会話履歴です。\n\n`;
 
-    for (const msg of history) {
-        if (msg.role === "assistant") {
-            prompt += `あなた: ${msg.text}\n`;
-        } else {
-            prompt += `${msg.name}さん: ${msg.text}\n`;
-        }
-    }
+    //for (const msg of history) {
+        //if (msg.role === "assistant") {
+          //  prompt += `あなた: ${msg.text}\n`;
+        //} else {
+            //prompt += `${msg.name}さん: ${msg.text}\n`;
+        //}
+    //}
 
-    prompt += `\n上の流れを踏まえて自然に返信してください。
-- 80文字以内
-- 必ず丁寧語で、ですます調
-- 「@」禁止、メンション禁止
-- 会話の流れをちゃんと踏まえること
-- 相手の名前を呼んでも構いません`;
-
+    //prompt += `\n上の流れを踏まえて自然に返信してください。
+//- 80文字以内
+//- 必ず丁寧語で、ですます調
+//- 「@」禁止、メンション禁止
+//- 会話の流れをちゃんと踏まえること
+//- 相手の名前を呼んでも構いません`;
+　　prompt="まだ無理です"
     return prompt;
 }
 
