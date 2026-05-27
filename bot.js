@@ -1347,10 +1347,9 @@ async function main() {
         // 13. 最終投稿
         console.log("📤 Misskeyに投稿中...");
         try {
-            outputText = `【パブリック運用試験中...】${outputText}`;
             const resData = await requestToMisskey(domain, token, 'notes/create', {
             text: outputText.trim().slice(0, 110),
-            visibility: 'public' // ここを 'home' から 'public' に変更
+            visibility: 'home' // ここを 'home' から 'public' に変更
         });
             console.log(`✓ 投稿成功！ Note ID: ${resData.createdNote?.id || "N/A"}`);
         } catch (err) {
